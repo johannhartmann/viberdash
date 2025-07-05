@@ -233,7 +233,7 @@ class DashboardUI:
         self,
         table: Table,
         name: str,
-        current: float,
+        current: float | None,
         previous: float | None,
         trend_data: list[float],
         threshold_key: str,
@@ -268,7 +268,7 @@ class DashboardUI:
         )
 
     def _format_delta(
-        self, current: float, previous: float | None, lower_is_better: bool
+        self, current: float | None, previous: float | None, lower_is_better: bool
     ) -> str:
         """Format the change between current and previous values."""
         if current is None or previous is None or previous == 0:
@@ -302,7 +302,7 @@ class DashboardUI:
         return f"[{color}]{arrow} {abs(delta)}[/{color}]"
 
     def _get_status(
-        self, value: float, threshold_key: str, lower_is_better: bool
+        self, value: float | None, threshold_key: str, lower_is_better: bool
     ) -> tuple[str, str]:
         """Determine status and color based on thresholds."""
         # Handle None values
