@@ -182,8 +182,9 @@ def test_run_main_loop(
 
 def test_load_config_no_file():
     """Test load_config when pyproject.toml doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmpdir, patch(
-        "viberdash.vibescan.Path.cwd", return_value=Path(tmpdir)
+    with (
+        tempfile.TemporaryDirectory() as tmpdir,
+        patch("viberdash.vibescan.Path.cwd", return_value=Path(tmpdir)),
     ):
         config = load_config()
         assert config == {}
