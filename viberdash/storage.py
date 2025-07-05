@@ -19,7 +19,8 @@ class MetricsStorage:
     def init_db(self) -> None:
         """Create database and tables if they don't exist."""
         with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS metrics (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -32,11 +33,14 @@ class MetricsStorage:
                     total_lines INTEGER,
                     raw_data TEXT
                 )
-            """)
-            conn.execute("""
+            """
+            )
+            conn.execute(
+                """
                 CREATE INDEX IF NOT EXISTS idx_timestamp
                 ON metrics(timestamp DESC)
-            """)
+            """
+            )
             conn.commit()
 
     def save_metrics(self, metrics: dict[str, Any]) -> int:
@@ -83,11 +87,13 @@ class MetricsStorage:
         """Get the most recent metrics entry."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT * FROM metrics
                 ORDER BY timestamp DESC
                 LIMIT 1
-            """)
+            """
+            )
             row = cursor.fetchone()
 
             if row:
@@ -121,11 +127,13 @@ class MetricsStorage:
         """Get the second most recent metrics entry (for delta calculation)."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
+            cursor = conn.execute(
+                """
                 SELECT * FROM metrics
                 ORDER BY timestamp DESC
                 LIMIT 1 OFFSET 1
-            """)
+            """
+            )
             row = cursor.fetchone()
 
             if row:

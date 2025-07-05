@@ -60,15 +60,17 @@ def test_save_metrics(storage):
 def test_get_latest(storage):
     """Test retrieving the latest metrics."""
     import time
-    
+
     # Save some metrics
     metrics1 = {"avg_complexity": 5.0}
     metrics2 = {"avg_complexity": 6.0}
 
     id1 = storage.save_metrics(metrics1)
-    time.sleep(1.1)  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
+    time.sleep(
+        1.1
+    )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
     id2 = storage.save_metrics(metrics2)
-    
+
     latest = storage.get_latest()
     assert latest is not None
     assert latest["avg_complexity"] == 6.0
@@ -77,11 +79,13 @@ def test_get_latest(storage):
 def test_get_history(storage):
     """Test retrieving metrics history."""
     import time
-    
+
     # Save multiple metrics
     for i in range(5):
         storage.save_metrics({"avg_complexity": float(i)})
-        time.sleep(1.1)  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
+        time.sleep(
+            1.1
+        )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
 
     history = storage.get_history(limit=3)
     assert len(history) == 3
@@ -94,10 +98,12 @@ def test_get_history(storage):
 def test_get_previous(storage):
     """Test retrieving the previous metrics entry."""
     import time
-    
+
     # Save two metrics
     storage.save_metrics({"avg_complexity": 5.0})
-    time.sleep(1.1)  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
+    time.sleep(
+        1.1
+    )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
     storage.save_metrics({"avg_complexity": 6.0})
 
     previous = storage.get_previous()
@@ -117,7 +123,7 @@ def test_row_to_dict_with_raw_data(storage):
     """Test _row_to_dict with raw_data JSON parsing."""
     import json
     import sqlite3
-    
+
     # Create metrics with nested raw_data
     metrics = {
         "avg_complexity": 5.0,
@@ -125,13 +131,13 @@ def test_row_to_dict_with_raw_data(storage):
         "style_issues": 10,
         "style_violations": 2.5,
     }
-    
+
     # Save metrics
     storage.save_metrics(metrics)
-    
+
     # Get the latest entry
     latest = storage.get_latest()
-    
+
     # Verify raw_data was parsed correctly
     assert isinstance(latest["raw_data"], dict)
     # Check that the metrics are in raw_data
@@ -147,18 +153,21 @@ def test_row_to_dict_with_raw_data(storage):
 def test_row_to_dict_invalid_json(storage):
     """Test _row_to_dict with invalid JSON in raw_data."""
     import sqlite3
-    
+
     # Manually insert a record with invalid JSON
     with sqlite3.connect(storage.db_path) as conn:
-        conn.execute("""
+        conn.execute(
+            """
             INSERT INTO metrics (avg_complexity, raw_data)
             VALUES (?, ?)
-        """, (5.0, "invalid json {"))
+        """,
+            (5.0, "invalid json {"),
+        )
         conn.commit()
-    
+
     # Get the latest entry
     latest = storage.get_latest()
-    
+
     # Should handle invalid JSON gracefully
     assert latest is not None
     assert latest["avg_complexity"] == 5.0
@@ -175,6 +184,6 @@ def test_get_latest_empty_db(storage):
 def test_get_previous_single_entry(storage):
     """Test get_previous with only one entry."""
     storage.save_metrics({"avg_complexity": 5.0})
-    
+
     previous = storage.get_previous()
     assert previous is None  # No second entry exists

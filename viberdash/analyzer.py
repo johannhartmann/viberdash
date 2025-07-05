@@ -53,10 +53,14 @@ class CodeAnalyzer:
 
             data = json.loads(result.stdout)
             complexities = self._extract_complexities(data)
-            
+
             if not complexities:
-                return {"avg_complexity": 0.0, "max_complexity": 0.0, "total_functions": 0}
-                
+                return {
+                    "avg_complexity": 0.0,
+                    "max_complexity": 0.0,
+                    "total_functions": 0,
+                }
+
             return {
                 "avg_complexity": sum(complexities) / len(complexities),
                 "max_complexity": max(complexities),
@@ -66,16 +70,16 @@ class CodeAnalyzer:
         except Exception as e:
             print(f"Error analyzing complexity: {e}")
             return {"avg_complexity": 0.0, "max_complexity": 0.0, "total_functions": 0}
-    
+
     def _extract_complexities(self, data: dict) -> list[int]:
         """Extract complexity values from radon output.
-        
+
         Args:
             data: JSON data from radon cc command
-            
+
         Returns:
             List of complexity values
-            
+
         """
         complexities = []
         for _file_path, file_data in data.items():
@@ -122,13 +126,15 @@ class CodeAnalyzer:
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".pylintrc", delete=False
             ) as f:
-                f.write("""[MESSAGES CONTROL]
+                f.write(
+                    """[MESSAGES CONTROL]
 disable=all
 enable=duplicate-code
 
 [REPORTS]
 output-format=json
-""")
+"""
+                )
                 pylintrc_path = f.name
 
             try:
@@ -180,25 +186,25 @@ output-format=json
             if not test_dir:
                 print("No test directory found or coverage analysis failed")
                 return {"test_coverage": 0.0}
-            
+
             # Get module name and run coverage
             module_name = self.source_dir.name
             print(f"Running coverage analysis for {module_name}...")
-            
+
             result = self._run_pytest_coverage(test_dir, project_root, module_name)
-            
+
             # Parse coverage from output
             coverage = self._parse_coverage_output(result.stdout)
             if coverage is not None:
                 print(f"Test coverage: {coverage:.1f}%")
                 return {"test_coverage": coverage}
-            
+
             # Check if tests ran but couldn't parse coverage
             if "failed" in result.stdout or "passed" in result.stdout:
                 print("Tests ran but couldn't parse coverage")
             else:
                 print("No tests found or pytest failed to run")
-            
+
             return {"test_coverage": 0.0}
 
         except subprocess.TimeoutExpired:
@@ -212,44 +218,44 @@ output-format=json
         """Analyze dead code using vulture."""
         try:
             result = self._run_vulture()
-            
+
             if not result.stdout.strip():
                 return {"dead_code": 0.0}
 
             dead_code_count = self._count_vulture_findings(result.stdout)
             total_elements = max(1, self._count_pattern(r"^\s*(def|class)\s+\w+"))
-            
+
             dead_code_percentage = (dead_code_count / total_elements) * 100
             return {"dead_code": min(dead_code_percentage, 100.0)}
 
         except Exception as e:
             print(f"Error analyzing dead code: {e}")
             return {"dead_code": 0.0}
-    
+
     def _run_vulture(self) -> subprocess.CompletedProcess:
         """Run vulture to find dead code.
-        
+
         Returns:
             Completed process result from vulture run
-            
+
         """
         whitelist_path = self.source_dir.parent / ".vulture_whitelist"
         cmd = [sys.executable, "-m", "vulture", str(self.source_dir)]
-        
+
         if whitelist_path.exists():
             cmd.append(str(whitelist_path))
-            
+
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
-    
+
     def _count_vulture_findings(self, output: str) -> int:
         """Count the number of dead code items from vulture output.
-        
+
         Args:
             output: The stdout from vulture run
-            
+
         Returns:
             Number of dead code items found
-            
+
         """
         count = 0
         for line in output.strip().split("\n"):
@@ -333,7 +339,7 @@ output-format=json
             # Count total documentable elements (classes, functions, methods)
             # This is an approximation - counts def/class statements
             total_elements = self._count_pattern(r"^\s*(def|class)\s+\w+")
-            
+
             # Calculate documentation coverage percentage
             # Higher issues = lower coverage
             if total_elements > 0:
@@ -414,37 +420,39 @@ output-format=json
 
     def _find_test_directory(self) -> tuple[Path | None, Path | None]:
         """Find the test directory by searching up from source_dir.
-        
+
         Returns:
             Tuple of (test_dir, project_root) or (None, None) if not found
-            
+
         """
         current = self.source_dir
         search_depth = 5  # Limit search depth
-        
+
         for _ in range(search_depth):
             potential_test_dir = current / "tests"
             if potential_test_dir.exists() and potential_test_dir.is_dir():
                 return potential_test_dir, current
-                
+
             # Stop if we've reached the root
             if current.parent == current:
                 break
             current = current.parent
-            
+
         return None, None
 
-    def _run_pytest_coverage(self, test_dir: Path, project_root: Path, module_name: str) -> subprocess.CompletedProcess:
+    def _run_pytest_coverage(
+        self, test_dir: Path, project_root: Path, module_name: str
+    ) -> subprocess.CompletedProcess:
         """Run pytest with coverage for the specified module.
-        
+
         Args:
             test_dir: Path to tests directory
             project_root: Project root directory
             module_name: Name of module to measure coverage for
-            
+
         Returns:
             Completed process result from pytest run
-            
+
         """
         return subprocess.run(
             [
@@ -467,21 +475,21 @@ output-format=json
 
     def _parse_coverage_output(self, output: str) -> float | None:
         """Parse coverage percentage from pytest terminal output.
-        
+
         Args:
             output: The stdout from pytest coverage run
-            
+
         Returns:
             Coverage percentage or None if parsing failed
-            
+
         """
-        for line in output.split('\n'):
-            if line.strip().startswith('TOTAL'):
+        for line in output.split("\n"):
+            if line.strip().startswith("TOTAL"):
                 # Line format: "TOTAL    454    36    92%"
                 parts = line.split()
-                if len(parts) >= 4 and parts[-1].endswith('%'):
+                if len(parts) >= 4 and parts[-1].endswith("%"):
                     try:
-                        return float(parts[-1].rstrip('%'))
+                        return float(parts[-1].rstrip("%"))
                     except ValueError:
                         pass
         return None

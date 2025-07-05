@@ -146,12 +146,14 @@ def main(source_dir: Path | None, interval: int, config: Path | None) -> None:
     console = Console()
 
     # Print banner
-    console.print("""
+    console.print(
+        """
 [bold cyan]f  ffTW TPWTfWTPWTPWf f
 ZWT]Q`iWQc  QQ`PcZPW`Pc
  Z] iZP]ZP]Pi]i iZP]i i[/bold cyan]
 [dim]Real-time Code Quality Dashboard[/dim]
-""")
+"""
+    )
 
     # Load configuration
     if config:
@@ -168,7 +170,7 @@ ZWT]Q`iWQc  QQ`PcZPW`Pc
     # Determine source directory
     if source_dir is None:
         source_dir = Path(viberdash_config.get("source_dir", "."))
-    
+
     source_dir = source_dir.resolve()
 
     # Validate source directory

@@ -85,21 +85,25 @@ def test_create_sparkline():
 def test_convert_to_quality_scores():
     """Test converting values to quality scores."""
     ui = DashboardUI()
-    
+
     # Test lower_is_better metric
     values = [3.0, 7.0, 12.0]  # good, middle, bad for cyclomatic complexity
-    scores = ui._convert_to_quality_scores(values, "cyclomatic_complexity", lower_is_better=True)
+    scores = ui._convert_to_quality_scores(
+        values, "cyclomatic_complexity", lower_is_better=True
+    )
     assert scores[0] == 1.0  # 3.0 is good (below threshold)
     assert 0 < scores[1] < 1  # 7.0 is in the middle
     assert scores[2] == 0.0  # 12.0 is bad (above threshold)
-    
+
     # Test higher_is_better metric
     values = [95.0, 75.0, 50.0]  # good, middle, bad for test coverage
-    scores = ui._convert_to_quality_scores(values, "test_coverage", lower_is_better=False)
+    scores = ui._convert_to_quality_scores(
+        values, "test_coverage", lower_is_better=False
+    )
     assert scores[0] == 1.0  # 95% is good
     assert 0 < scores[1] < 1  # 75% is in the middle
     assert scores[2] == 0.0  # 50% is bad
-    
+
     # Test empty values
     scores = ui._convert_to_quality_scores([], "test_coverage", lower_is_better=False)
     assert scores == []
@@ -108,21 +112,21 @@ def test_convert_to_quality_scores():
 def test_format_int_delta():
     """Test integer delta formatting."""
     ui = DashboardUI()
-    
+
     # Test increase
     delta = ui._format_int_delta(10, 8)
     assert "↑" in delta
     assert "2" in delta
-    
+
     # Test decrease
     delta = ui._format_int_delta(8, 10)
     assert "↓" in delta
     assert "2" in delta
-    
+
     # Test no change
     delta = ui._format_int_delta(10, 10)
     assert "→ 0" in delta
-    
+
     # Test no previous value
     delta = ui._format_int_delta(10, None)
     assert delta == "-"
@@ -131,12 +135,12 @@ def test_format_int_delta():
 def test_display_dashboard(capsys):
     """Test dashboard display."""
     from unittest.mock import MagicMock
-    
+
     ui = DashboardUI()
-    
+
     # Mock console to prevent actual output
     ui.console = MagicMock()
-    
+
     # Test data
     latest = {
         "avg_complexity": 5.0,
@@ -149,14 +153,14 @@ def test_display_dashboard(capsys):
         "total_functions": 50,
         "total_classes": 10,
         "total_lines": 1000,
-        "timestamp": "2023-07-05 10:00:00"
+        "timestamp": "2023-07-05 10:00:00",
     }
-    
+
     history = [latest]
-    
+
     # Should not raise exception
     ui.display_dashboard(latest, history)
-    
+
     # Verify console methods were called
     assert ui.console.clear.called
     assert ui.console.print.called
@@ -166,14 +170,14 @@ def test_show_scanning(capsys):
     """Test scanning status display."""
     from unittest.mock import MagicMock
     from rich.panel import Panel
-    
+
     ui = DashboardUI()
-    
+
     # Mock console
     ui.console = MagicMock()
-    
+
     ui.show_scanning()
-    
+
     # Verify print was called with a Panel
     ui.console.print.assert_called_once()
     call_args = ui.console.print.call_args[0][0]
@@ -183,9 +187,10 @@ def test_show_scanning(capsys):
 def test_create_footer():
     """Test footer creation."""
     ui = DashboardUI()
-    
+
     footer = ui._create_footer()
-    
+
     # Footer should be a Panel
     from rich.panel import Panel
+
     assert isinstance(footer, Panel)
