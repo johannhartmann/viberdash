@@ -178,19 +178,17 @@ def test_analyze_maintainability_error_handling(temp_project):
     """Test maintainability analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
     
-    # Mock radon mi to return invalid output
-    original_run = subprocess.run
-    def mock_radon_mi(cmd, *args, **kwargs):
-        if "radon" in cmd[0] and "mi" in cmd:
-            result = MagicMock()
-            result.stdout = "invalid output"
-            result.returncode = 0
-            return result
-        return original_run(cmd, *args, **kwargs)
-    
-    with patch("viberdash.analyzer.subprocess.run", side_effect=mock_radon_mi):
-        metrics = analyzer.run_analysis()
-        assert metrics["maintainability_index"] == 0  # Should return 0 on error
+    # Mock subprocess.run to return invalid JSON for radon mi
+    with patch("viberdash.analyzer.subprocess.run") as mock_run:
+        mock_result = MagicMock()
+        mock_result.stdout = "invalid json output"
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
+        
+        # Test just the maintainability method directly
+        result = analyzer._analyze_maintainability()
+        # The mock should cause JSON parsing to fail, returning 0
+        assert result["maintainability_index"] == 0.0  # Should return 0 on error
 
 
 def test_analyze_coverage_no_coverage_file(temp_project):
@@ -212,35 +210,29 @@ def test_analyze_dead_code_error_handling(temp_project):
     """Test dead code analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
     
-    # Mock vulture to return empty output
-    original_run = subprocess.run
-    def mock_vulture(cmd, *args, **kwargs):
-        if "vulture" in cmd[0]:
-            result = MagicMock()
-            result.stdout = ""
-            result.returncode = 0
-            return result
-        return original_run(cmd, *args, **kwargs)
-    
-    with patch("viberdash.analyzer.subprocess.run", side_effect=mock_vulture):
-        metrics = analyzer.run_analysis()
-        assert metrics["dead_code"] == 0  # Should return 0 on empty output
+    # Mock subprocess.run to return empty output for vulture
+    with patch("viberdash.analyzer.subprocess.run") as mock_run:
+        mock_result = MagicMock()
+        mock_result.stdout = ""
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
+        
+        # Test just the dead code method directly
+        result = analyzer._analyze_dead_code()
+        assert result["dead_code"] == 0.0  # Should return 0 on empty output
 
 
 def test_analyze_style_violations_error_handling(temp_project):
     """Test style violations analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
     
-    # Mock ruff to return invalid JSON
-    original_run = subprocess.run
-    def mock_ruff(cmd, *args, **kwargs):
-        if "ruff" in cmd[0]:
-            result = MagicMock()
-            result.stdout = "invalid json"
-            result.returncode = 0
-            return result
-        return original_run(cmd, *args, **kwargs)
-    
-    with patch("viberdash.analyzer.subprocess.run", side_effect=mock_ruff):
-        metrics = analyzer.run_analysis()
-        assert metrics["style_violations"] == 0  # Should return 0 on parse error
+    # Mock subprocess.run to return invalid JSON for ruff
+    with patch("viberdash.analyzer.subprocess.run") as mock_run:
+        mock_result = MagicMock()
+        mock_result.stdout = "invalid json"
+        mock_result.returncode = 0
+        mock_run.return_value = mock_result
+        
+        # Test just the style issues method directly
+        result = analyzer._analyze_style_issues()
+        assert result["style_violations"] == 0.0  # Should return 0 on parse error

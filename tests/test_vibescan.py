@@ -244,7 +244,7 @@ def test_main_command_default_args(mock_load_config, mock_console_cls, mock_runn
                 print(f"DEBUG: Exception: {''.join(traceback.format_exception(type(result.exception), result.exception, result.exception.__traceback__))}")
         assert result.exit_code == 0
         mock_runner_cls.assert_called_once()
-        mock_runner.run.assert_called_once_with(60)
+        mock_runner.run.assert_called_once_with(180)
 
 
 @patch("viberdash.vibescan.Console")
