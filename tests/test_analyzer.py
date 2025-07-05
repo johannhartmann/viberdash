@@ -2,8 +2,10 @@
 Tests for the analyzer module.
 """
 
+import subprocess
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -85,10 +87,6 @@ def test_count_pattern(temp_project):
     analyzer = CodeAnalyzer(temp_project)
     class_count = analyzer._count_pattern(r"^class\s+\w+")
     assert class_count == 1  # ExampleClass
-
-
-import subprocess
-from unittest.mock import MagicMock, patch
 
 
 def test_run_analysis_with_errors(temp_project):

@@ -4,9 +4,8 @@ Tests for the vibescan module.
 
 import signal
 import tempfile
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -183,10 +182,11 @@ def test_run_main_loop(
 
 def test_load_config_no_file():
     """Test load_config when pyproject.toml doesn't exist."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with patch("viberdash.vibescan.Path.cwd", return_value=Path(tmpdir)):
-            config = load_config()
-            assert config == {}
+    with tempfile.TemporaryDirectory() as tmpdir, patch(
+        "viberdash.vibescan.Path.cwd", return_value=Path(tmpdir)
+    ):
+        config = load_config()
+        assert config == {}
 
 
 def test_load_config_with_file():
@@ -255,9 +255,12 @@ def test_main_command_default_args(mock_load_config, mock_console_cls, mock_runn
             if result.exception:
                 import traceback
 
-                print(
-                    f"DEBUG: Exception: {''.join(traceback.format_exception(type(result.exception), result.exception, result.exception.__traceback__))}"
+                exc_info = traceback.format_exception(
+                    type(result.exception),
+                    result.exception,
+                    result.exception.__traceback__,
                 )
+                print(f"DEBUG: Exception: {''.join(exc_info)}")
         assert result.exit_code == 0
         mock_runner_cls.assert_called_once()
         mock_runner.run.assert_called_once_with(180)

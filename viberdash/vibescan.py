@@ -36,7 +36,7 @@ class ViberDashRunner:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
-    def _signal_handler(self, signum, frame):
+    def _signal_handler(self, signum: int, frame: Any) -> None:
         """Handle shutdown signals gracefully."""
         _ = signum, frame  # Unused but required by signal handler interface
         self.running = False
@@ -110,7 +110,9 @@ def load_config() -> dict[str, Any]:
     try:
         with open(config_path, "rb") as f:
             pyproject = tomli.load(f)
-            return pyproject.get("tool", {}).get("viberdash", {})
+            tool_config = pyproject.get("tool", {})
+            viberdash_config: dict[str, Any] = tool_config.get("viberdash", {})
+            return viberdash_config
     except Exception as e:
         Console().print(f"[yellow]Warning: Could not load config: {e}[/yellow]")
         return {}

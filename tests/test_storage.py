@@ -65,11 +65,11 @@ def test_get_latest(storage):
     metrics1 = {"avg_complexity": 5.0}
     metrics2 = {"avg_complexity": 6.0}
 
-    id1 = storage.save_metrics(metrics1)
+    storage.save_metrics(metrics1)
     time.sleep(
         1.1
     )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
-    id2 = storage.save_metrics(metrics2)
+    storage.save_metrics(metrics2)
 
     latest = storage.get_latest()
     assert latest is not None
@@ -121,8 +121,6 @@ def test_cleanup_old_entries(storage):
 
 def test_row_to_dict_with_raw_data(storage):
     """Test _row_to_dict with raw_data JSON parsing."""
-    import json
-    import sqlite3
 
     # Create metrics with nested raw_data
     metrics = {
@@ -152,7 +150,6 @@ def test_row_to_dict_with_raw_data(storage):
 
 def test_row_to_dict_invalid_json(storage):
     """Test _row_to_dict with invalid JSON in raw_data."""
-    import sqlite3
 
     # Manually insert a record with invalid JSON
     with sqlite3.connect(storage.db_path) as conn:

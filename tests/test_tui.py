@@ -2,6 +2,8 @@
 Tests for the TUI module.
 """
 
+from rich.panel import Panel
+
 from viberdash.tui import DashboardUI
 
 
@@ -169,7 +171,6 @@ def test_display_dashboard(capsys):
 def test_show_scanning(capsys):
     """Test scanning status display."""
     from unittest.mock import MagicMock
-    from rich.panel import Panel
 
     ui = DashboardUI()
 

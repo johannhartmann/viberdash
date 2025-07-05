@@ -81,7 +81,8 @@ class MetricsStorage:
                 record,
             )
             conn.commit()
-            return cursor.lastrowid
+            lastrowid = cursor.lastrowid
+            return lastrowid if lastrowid is not None else 0
 
     def get_latest(self) -> dict[str, Any] | None:
         """Get the most recent metrics entry."""

@@ -191,6 +191,9 @@ output-format=json
             module_name = self.source_dir.name
             print(f"Running coverage analysis for {module_name}...")
 
+            if project_root is None:
+                print("No project root found")
+                return {"test_coverage": 0.0}
             result = self._run_pytest_coverage(test_dir, project_root, module_name)
 
             # Parse coverage from output
@@ -263,7 +266,7 @@ output-format=json
                 count += 1
         return count
 
-    def _analyze_style_issues(self) -> dict[str, int]:
+    def _analyze_style_issues(self) -> dict[str, float | int]:
         """Analyze code style issues using ruff."""
         try:
             # Run ruff with JSON output
@@ -299,7 +302,10 @@ output-format=json
                 (total_issues / max(1, total_lines)) * 100 if total_lines > 0 else 0
             )
 
-            return {"style_issues": total_issues, "style_violations": style_percentage}
+            return {
+                "style_issues": total_issues,
+                "style_violations": style_percentage,
+            }
 
         except Exception as e:
             print(f"Error analyzing style issues: {e}")
