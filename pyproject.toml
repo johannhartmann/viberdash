@@ -134,6 +134,10 @@ bad = 10.0
 good = 85.0
 bad = 65.0
 
+[tool.viberdash.thresholds.maintainability_density]
+good = 70.0
+bad = 50.0
+
 [tool.viberdash.thresholds.test_coverage]
 good = 80.0
 bad = 60.0

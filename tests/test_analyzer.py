@@ -65,6 +65,7 @@ def test_run_analysis(temp_project):
     # Check that metrics dict contains expected keys
     assert "avg_complexity" in metrics
     assert "maintainability_index" in metrics
+    assert "maintainability_density" in metrics
     assert "test_coverage" in metrics
     assert "code_duplication" in metrics
     assert "total_lines" in metrics
@@ -73,6 +74,7 @@ def test_run_analysis(temp_project):
     # Basic sanity checks
     assert metrics["total_lines"] > 0
     assert metrics["total_classes"] >= 1  # We have ExampleClass
+    assert metrics["maintainability_density"] > 0  # Should be calculated
 
 
 def test_count_lines(temp_project):
@@ -239,3 +241,23 @@ def test_analyze_style_violations_error_handling(temp_project):
         # Test just the style issues method directly
         result = analyzer._analyze_style_issues()
         assert result["style_violations"] == 0.0  # Should return 0 on parse error
+
+
+def test_calculate_maintainability_density(temp_project):
+    """Test maintainability density calculation."""
+    analyzer = CodeAnalyzer(temp_project)
+
+    # Test with normal values
+    metrics = {"maintainability_index": 75.0, "total_code_lines": 1000}
+    result = analyzer._calculate_maintainability_density(metrics)
+    assert result["maintainability_density"] == 75.0  # 75 / (1000/1000)
+
+    # Test with small codebase
+    metrics = {"maintainability_index": 80.0, "total_code_lines": 100}
+    result = analyzer._calculate_maintainability_density(metrics)
+    assert result["maintainability_density"] == 800.0  # 80 / (100/1000)
+
+    # Test with zero code lines
+    metrics = {"maintainability_index": 50.0, "total_code_lines": 0}
+    result = analyzer._calculate_maintainability_density(metrics)
+    assert result["maintainability_density"] == 50.0  # Falls back to MI

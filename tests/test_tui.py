@@ -39,6 +39,11 @@ def test_get_status():
     assert status == "✓ Good"
     assert color == "green"
 
+    # Test None value
+    status, color = ui._get_status(None, "test_coverage", lower_is_better=False)
+    assert status == "? N/A"
+    assert color == "dim"
+
 
 def test_format_delta():
     """Test delta formatting."""
@@ -56,6 +61,10 @@ def test_format_delta():
 
     # Test no previous value
     delta = ui._format_delta(5.0, None, lower_is_better=True)
+    assert delta == "-"
+
+    # Test None current value
+    delta = ui._format_delta(None, 5.0, lower_is_better=True)
     assert delta == "-"
 
 

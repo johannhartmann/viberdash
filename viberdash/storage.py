@@ -41,6 +41,16 @@ class MetricsStorage:
                 ON metrics(timestamp DESC)
             """
             )
+
+            # Add maintainability_density column if it doesn't exist
+            cursor = conn.execute("PRAGMA table_info(metrics)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if "maintainability_density" not in columns:
+                conn.execute(
+                    "ALTER TABLE metrics ADD COLUMN maintainability_density REAL"
+                )
+
             conn.commit()
 
     def save_metrics(self, metrics: dict[str, Any]) -> int:
@@ -57,6 +67,7 @@ class MetricsStorage:
         record = {
             "avg_complexity": metrics.get("avg_complexity", 0.0),
             "maintainability_index": metrics.get("maintainability_index", 0.0),
+            "maintainability_density": metrics.get("maintainability_density", 0.0),
             "test_coverage": metrics.get("test_coverage", 0.0),
             "code_duplication": metrics.get("code_duplication", 0.0),
             "total_functions": metrics.get("total_functions", 0),
@@ -69,12 +80,12 @@ class MetricsStorage:
             cursor = conn.execute(
                 """
                 INSERT INTO metrics (
-                    avg_complexity, maintainability_index, test_coverage,
-                    code_duplication, total_functions, total_classes,
+                    avg_complexity, maintainability_index, maintainability_density,
+                    test_coverage, code_duplication, total_functions, total_classes,
                     total_lines, raw_data
                 ) VALUES (
-                    :avg_complexity, :maintainability_index, :test_coverage,
-                    :code_duplication, :total_functions, :total_classes,
+                    :avg_complexity, :maintainability_index, :maintainability_density,
+                    :test_coverage, :code_duplication, :total_functions, :total_classes,
                     :total_lines, :raw_data
                 )
             """,
@@ -162,6 +173,17 @@ class MetricsStorage:
                     result["doc_issues"] = raw_data["doc_issues"]
                 if "doc_coverage" in raw_data:
                     result["doc_coverage"] = raw_data["doc_coverage"]
+                # Calculate maintainability_density if not present
+                if (
+                    "maintainability_density" not in result
+                    and result.get("maintainability_density") is None
+                ):
+                    mi = result.get("maintainability_index", 0.0)
+                    code_lines = raw_data.get("total_code_lines", 0)
+                    if code_lines > 0:
+                        result["maintainability_density"] = mi / (code_lines / 1000.0)
+                    else:
+                        result["maintainability_density"] = mi
             except json.JSONDecodeError:
                 result["raw_data"] = {}
         return result

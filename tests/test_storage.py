@@ -46,6 +46,7 @@ def test_save_metrics(storage):
     metrics = {
         "avg_complexity": 5.5,
         "maintainability_index": 75.0,
+        "maintainability_density": 150.0,
         "test_coverage": 85.5,
         "code_duplication": 3.2,
         "total_functions": 10,

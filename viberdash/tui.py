@@ -30,6 +30,7 @@ class DashboardUI:
         return {
             "cyclomatic_complexity": {"good": 5.0, "bad": 10.0},
             "maintainability_index": {"good": 85.0, "bad": 65.0},
+            "maintainability_density": {"good": 70.0, "bad": 50.0},
             "test_coverage": {"good": 80.0, "bad": 60.0},
             "code_duplication": {"good": 5.0, "bad": 15.0},
             "dead_code": {"good": 5.0, "bad": 15.0},
@@ -115,11 +116,11 @@ class DashboardUI:
 
         self._add_metric_row(
             table,
-            "Maintainability Index",
-            latest.get("maintainability_index", 0),
-            previous.get("maintainability_index", 0) if previous else None,
-            [h.get("maintainability_index", 0) for h in reversed(history)],
-            "maintainability_index",
+            "Maintainability Density",
+            latest.get("maintainability_density"),
+            previous.get("maintainability_density") if previous else None,
+            [h.get("maintainability_density", 0) for h in reversed(history)],
+            "maintainability_density",
             lower_is_better=False,
         )
 
@@ -241,7 +242,7 @@ class DashboardUI:
     ) -> None:
         """Add a metric row to the table with formatting."""
         # Format current value
-        current_str = f"{current:.1f}{suffix}"
+        current_str = f"{current:.1f}{suffix}" if current is not None else "N/A"
 
         # Calculate and format delta
         delta_str = self._format_delta(current, previous, lower_is_better)
@@ -270,7 +271,7 @@ class DashboardUI:
         self, current: float, previous: float | None, lower_is_better: bool
     ) -> str:
         """Format the change between current and previous values."""
-        if previous is None or previous == 0:
+        if current is None or previous is None or previous == 0:
             return "-"
 
         delta = current - previous
@@ -304,6 +305,10 @@ class DashboardUI:
         self, value: float, threshold_key: str, lower_is_better: bool
     ) -> tuple[str, str]:
         """Determine status and color based on thresholds."""
+        # Handle None values
+        if value is None:
+            return "? N/A", "dim"
+
         thresholds = self.thresholds.get(threshold_key, {})
         good = thresholds.get("good", 0)
         bad = thresholds.get("bad", 0)
