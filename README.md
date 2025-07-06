@@ -29,7 +29,19 @@ A real-time terminal dashboard for monitoring Python code quality metrics. Viber
 
 ## Installation
 
-### Quick Install with UV (Recommended)
+### Quick Install with Nix
+
+If you're using Nix, you can install ViberDash directly:
+
+```bash
+# Install to your profile
+nix profile install github:johannhartmann/viberdash
+
+# Or run without installing
+nix run github:johannhartmann/viberdash
+```
+
+### Install with UV (Recommended)
 
 ```bash
 # Install with UV
