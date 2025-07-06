@@ -13,6 +13,7 @@ from rich.console import Console
 from .analyzer import CodeAnalyzer
 from .storage import MetricsStorage
 from .tui import DashboardUI
+from .test_runner import run_external_tests
 
 
 class ViberDashRunner:
@@ -118,7 +119,12 @@ def load_config() -> dict[str, Any]:
         return {}
 
 
-@click.command()
+@click.group()
+def cli():
+    """ViberDash main entry point."""
+    pass
+
+@cli.command()
 @click.option(
     "--source-dir",
     "-s",
@@ -139,7 +145,7 @@ def load_config() -> dict[str, Any]:
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
     help="Path to configuration file (default: pyproject.toml)",
 )
-def main(source_dir: Path | None, interval: int, config: Path | None) -> None:
+def monitor(source_dir: Path | None, interval: int, config: Path | None) -> None:
     """ViberDash - Real-time code quality monitoring dashboard.
 
     Monitor your Python codebase with live metrics including complexity,
@@ -197,6 +203,16 @@ ZWT]Q`iWQc  QQ`PcZPW`Pc
     except Exception as e:
         console.print(f"[red]Fatal error: {e}[/red]")
         sys.exit(1)
+
+
+@cli.command()
+def test():
+    """Run external tests for a project."""
+    run_external_tests()
+
+
+def main():
+    cli()
 
 
 if __name__ == "__main__":
