@@ -23,6 +23,7 @@
           ruff
           mypy
           ipython
+          pytest-watch  # Added missing dev dependency
           
           # Project dependencies
           rich
@@ -37,6 +38,9 @@
           pytest-cov
           vulture
         ]);
+        
+        # Load pyproject.toml to get project metadata
+        pyprojectToml = builtins.fromTOML (builtins.readFile ./pyproject.toml);
       in
       {
         devShells.default = pkgs.mkShell {
@@ -82,10 +86,53 @@
           VIBERDASH_DEV = "1";
         };
         
-        # TODO: Add package output using uv2nix for end-user installation
-        # packages.default = uv2nix.lib.mkPythonPackage {
-        #   inherit python;
-        #   projectRoot = ./.;
-        # };
+        # Package output for end-user installation
+        packages.default = python.pkgs.buildPythonPackage {
+          pname = "viberdash";
+          version = pyprojectToml.project.version;
+          
+          src = ./.;
+          
+          # Use the modern pyproject format
+          format = "pyproject";
+          
+          # Build system dependencies
+          nativeBuildInputs = with python.pkgs; [
+            hatchling
+          ];
+          
+          # Runtime dependencies from pyproject.toml
+          propagatedBuildInputs = with python.pkgs; [
+            rich
+            click
+            tomli
+            radon
+            pylint
+            coverage
+            pytest
+            pytest-cov
+            vulture
+          ];
+          
+          # Optional: include test dependencies
+          nativeCheckInputs = with python.pkgs; [
+            pytest
+            pytest-cov
+          ];
+          
+          # Run tests during build
+          checkPhase = ''
+            runHook preCheck
+            pytest tests/
+            runHook postCheck
+          '';
+          
+          meta = with pkgs.lib; {
+            description = pyprojectToml.project.description;
+            homepage = pyprojectToml.project.urls.Homepage;
+            license = licenses.mit;
+            maintainers = [];
+          };
+        };
       });
 }

@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Commands
 
+### Environment Setup
+
+- Use `nix develop` to start python development environment
+
 ### Running ViberDash
 
 In `nix develop` environment:
