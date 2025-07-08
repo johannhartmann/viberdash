@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from viberdash.vibescan import ViberDashRunner, load_config, main
+from viberdash.vibescan import ViberDashRunner, load_config, cli
 
 
 @pytest.fixture
@@ -247,7 +247,7 @@ def test_main_command_default_args(mock_load_config, mock_console_cls, mock_runn
 
         # Run the command
         runner = CliRunner()
-        result = runner.invoke(main, ["--source-dir", str(tmpdir_path)])
+        result = runner.invoke(cli, ["monitor", "--source-dir", str(tmpdir_path)])
 
         # Should have created runner and called run
         if result.exit_code != 0:
@@ -274,7 +274,7 @@ def test_main_command_no_python_files(mock_console_cls):
 
     with tempfile.TemporaryDirectory() as tmpdir:
         runner = CliRunner()
-        result = runner.invoke(main, ["--source-dir", tmpdir])
+        result = runner.invoke(cli, ["monitor", "--source-dir", tmpdir])
 
         assert result.exit_code == 1
         assert "No Python files found" in str(
@@ -288,7 +288,7 @@ def test_main_command_invalid_source_dir(mock_console_cls):
     from click.testing import CliRunner
 
     runner = CliRunner()
-    result = runner.invoke(main, ["--source-dir", "/nonexistent/path"])
+    result = runner.invoke(cli, ["monitor", "--source-dir", "/nonexistent/path"])
 
     # Click validates path exists, so this should fail before our code
     assert result.exit_code != 0
@@ -326,7 +326,7 @@ source_dir = "."
         # Run the command
         runner = CliRunner()
         result = runner.invoke(
-            main, ["--config", str(config_path), "--source-dir", str(tmpdir_path)]
+            cli, ["monitor", "--config", str(config_path), "--source-dir", str(tmpdir_path)]
         )
 
         assert result.exit_code == 0
@@ -362,7 +362,7 @@ def test_main_command_custom_interval(
         # Run the command
         runner = CliRunner()
         result = runner.invoke(
-            main, ["--source-dir", str(tmpdir_path), "--interval", "30"]
+            cli, ["monitor", "--source-dir", str(tmpdir_path), "--interval", "30"]
         )
 
         assert result.exit_code == 0
@@ -385,6 +385,6 @@ def test_main_command_runner_exception(mock_runner_cls):
 
         # Run the command
         runner = CliRunner()
-        result = runner.invoke(main, ["--source-dir", str(tmpdir_path)])
+        result = runner.invoke(cli, ["monitor", "--source-dir", str(tmpdir_path)])
 
         assert result.exit_code == 1

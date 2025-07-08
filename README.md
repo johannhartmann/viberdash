@@ -87,28 +87,32 @@ pip install -e ".[dev]"
 
 ## Usage
 
-Once installed, you can run ViberDash from anywhere:
+⚠️ **Important**: ViberDash now uses a command-based interface. The main command is `monitor`:
 
 ### Basic Usage
 
 ```bash
 # Monitor the current directory
-viberdash
+viberdash monitor
 
 # Monitor a specific directory
-viberdash --source-dir /path/to/your/project
+viberdash monitor --source-dir /path/to/your/project
 
 # Set custom update interval (default: 180 seconds)
-viberdash --interval 30
+viberdash monitor --interval 30
 
 # Use a specific config file
-viberdash --config /path/to/pyproject.toml
+viberdash monitor --config /path/to/pyproject.toml
 ```
 
 ### Command Line Options
 
 ```
-Options:
+Commands:
+  monitor  Start the real-time monitoring dashboard
+  test     Run external tests for a project
+
+Monitor Options:
   -s, --source-dir PATH  Source directory to analyze
   -i, --interval INT     Update interval in seconds (default: 180)
   -c, --config PATH      Path to configuration file (default: pyproject.toml)
@@ -167,19 +171,48 @@ For ViberDash to work properly, your project should have:
 - **A test directory**: Usually `tests/` with test files
 - **Python 3.12+**: Required for ViberDash itself
 
+⚠️ **Critical for Test Coverage**: To enable ViberDash to run your tests and calculate coverage, you must install ViberDash and its dependencies in your project's development environment:
+
+```toml
+# In your project's pyproject.toml
+[project.optional-dependencies]
+dev = [
+    "viberdash",  # Add this to enable test coverage monitoring
+    # your other dev dependencies...
+]
+
+# Or if using [tool.uv]
+[tool.uv]
+dev-dependencies = [
+    "viberdash",  # Add this to enable test coverage monitoring
+    # your other dev dependencies...
+]
+```
+
+Then install with dev dependencies:
+```bash
+# Using pip
+pip install -e ".[dev]"
+
+# Or using uv
+uv pip install -e ".[dev]"
+```
+
+This ensures that when ViberDash runs `pytest` in your project directory, all necessary dependencies are available.
+
 ### 3. Running ViberDash
 
 From your project root:
 
 ```bash
 # If pyproject.toml has [tool.viberdash] config
-viberdash
+viberdash monitor
 
 # Or specify the source directory explicitly
-viberdash --source-dir src/
+viberdash monitor --source-dir src/
 
 # Or from anywhere, pointing to your project
-viberdash --source-dir /path/to/project/src/
+viberdash monitor --source-dir /path/to/project/src/
 ```
 
 ### 4. Example Configurations
