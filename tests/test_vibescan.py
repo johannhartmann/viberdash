@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from viberdash.vibescan import ViberDashRunner, load_config, cli
+from viberdash.vibescan import ViberDashRunner, cli, load_config
 
 
 @pytest.fixture
@@ -326,7 +326,8 @@ source_dir = "."
         # Run the command
         runner = CliRunner()
         result = runner.invoke(
-            cli, ["monitor", "--config", str(config_path), "--source-dir", str(tmpdir_path)]
+            cli,
+            ["monitor", "--config", str(config_path), "--source-dir", str(tmpdir_path)],
         )
 
         assert result.exit_code == 0

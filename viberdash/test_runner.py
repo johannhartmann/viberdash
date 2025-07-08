@@ -1,12 +1,12 @@
-
-
 import subprocess
-import tomli
 from pathlib import Path
+
+import tomli
 from rich.console import Console
 from rich.panel import Panel
 
 console = Console()
+
 
 def find_project_root(start_path: Path) -> Path | None:
     """Find the project root by looking for pyproject.toml."""
@@ -17,13 +17,17 @@ def find_project_root(start_path: Path) -> Path | None:
         path = path.parent
     return None
 
-def run_external_tests():
+
+def run_external_tests() -> None:
     """
     Finds and runs the test command specified in the target project's pyproject.toml.
     """
     project_root = find_project_root(Path.cwd())
     if not project_root:
-        console.print("[bold red]Error: pyproject.toml not found in the current directory or any parent directory.[/bold red]")
+        console.print(
+            "[bold red]Error: pyproject.toml not found in the current directory "
+            "or any parent directory.[/bold red]"
+        )
         return
 
     pyproject_path = project_root / "pyproject.toml"
@@ -33,10 +37,20 @@ def run_external_tests():
     test_command = config.get("tool", {}).get("viberdash", {}).get("test_command")
 
     if not test_command:
-        console.print(f"[bold yellow]Warning: No 'test_command' found in {pyproject_path} under [tool.viberdash].[/bold yellow]")
+        console.print(
+            f"[bold yellow]Warning: No 'test_command' found in {pyproject_path} "
+            "under [tool.viberdash].[/bold yellow]"
+        )
         return
 
-    console.print(Panel(f"Running command: [bold cyan]{test_command}[/bold cyan] in [dim]{project_root}[/dim]", title="[bold green]External Test Runner[/bold green]", expand=False))
+    console.print(
+        Panel(
+            f"Running command: [bold cyan]{test_command}[/bold cyan] "
+            f"in [dim]{project_root}[/dim]",
+            title="[bold green]External Test Runner[/bold green]",
+            expand=False,
+        )
+    )
 
     try:
         process = subprocess.run(
@@ -49,16 +63,35 @@ def run_external_tests():
         )
 
         if process.stdout:
-            console.print(Panel(process.stdout, title="[bold]Test Output (stdout)[/bold]", border_style="green"))
-        
+            console.print(
+                Panel(
+                    process.stdout,
+                    title="[bold]Test Output (stdout)[/bold]",
+                    border_style="green",
+                )
+            )
+
         if process.stderr:
-            console.print(Panel(process.stderr, title="[bold]Test Output (stderr)[/bold]", border_style="red"))
+            console.print(
+                Panel(
+                    process.stderr,
+                    title="[bold]Test Output (stderr)[/bold]",
+                    border_style="red",
+                )
+            )
 
         if process.returncode == 0:
             console.print("[bold green]✅ Tests passed successfully![/bold green]")
         else:
-            console.print(f"[bold red]❌ Tests failed with exit code {process.returncode}.[/bold red]")
+            console.print(
+                f"[bold red]❌ Tests failed with exit code "
+                f"{process.returncode}.[/bold red]"
+            )
 
     except Exception as e:
-        console.print(Panel(f"An error occurred while trying to run the test command:\n{e}", title="[bold red]Execution Error[/bold red]"))
-
+        console.print(
+            Panel(
+                f"An error occurred while trying to run the test command:\n{e}",
+                title="[bold red]Execution Error[/bold red]",
+            )
+        )

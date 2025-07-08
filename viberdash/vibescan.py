@@ -12,8 +12,8 @@ from rich.console import Console
 
 from .analyzer import CodeAnalyzer
 from .storage import MetricsStorage
-from .tui import DashboardUI
 from .test_runner import run_external_tests
+from .tui import DashboardUI
 
 
 class ViberDashRunner:
@@ -120,9 +120,10 @@ def load_config() -> dict[str, Any]:
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """ViberDash main entry point."""
     pass
+
 
 @cli.command()
 @click.option(
@@ -206,12 +207,12 @@ ZWT]Q`iWQc  QQ`PcZPW`Pc
 
 
 @cli.command()
-def test():
+def test() -> None:
     """Run external tests for a project."""
     run_external_tests()
 
 
-def main():
+def main() -> None:
     cli()
 
 
