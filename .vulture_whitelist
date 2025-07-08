@@ -6,5 +6,5 @@ _.row_factory
 
 # Storage methods used by the main application and TUI
 _.get_latest
-_.get_previous  
+_.get_previous
 _.cleanup_old_entries

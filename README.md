@@ -139,7 +139,7 @@ good = 5.0      # Below this = green
 bad = 10.0      # Above this = red
 
 [tool.viberdash.thresholds.maintainability_index]
-good = 85.0     # Above this = green  
+good = 85.0     # Above this = green
 bad = 65.0      # Below this = red
 
 [tool.viberdash.thresholds.test_coverage]
