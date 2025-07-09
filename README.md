@@ -4,6 +4,20 @@ A real-time terminal dashboard for monitoring Python code quality metrics. Viber
 
 ![ViberDash Screenshot](docs/screenshot.png)
 
+## Quick Start
+
+ViberDash is a development tool that monitors your Python project's code quality in real-time. It must be installed in your project's development environment:
+
+```bash
+# In your project's virtual environment
+pip install viberdash
+
+# Start monitoring
+viberdash monitor
+```
+
+**Note**: ViberDash executes `pytest`, `ruff`, `pylint`, and other tools on your code. These must be installed in the same environment.
+
 [![GitHub](https://img.shields.io/badge/GitHub-johannhartmann%2Fviberdash-blue)](https://github.com/johannhartmann/viberdash)
 [![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -29,80 +43,96 @@ A real-time terminal dashboard for monitoring Python code quality metrics. Viber
 
 ## Installation
 
-### Quick Install with Nix
+⚠️ **Important**: ViberDash must be installed in your project's development environment where pytest, ruff, pylint, and other analysis tools are available. It cannot analyze your code from an isolated installation.
 
-If you're using Nix, you can install ViberDash directly:
+### Install as a Development Dependency (Recommended)
 
-```bash
-# Install to your profile
-nix profile install github:johannhartmann/viberdash
+Add ViberDash to your project's development dependencies:
 
-# Or run without installing
-nix run github:johannhartmann/viberdash
+```toml
+# In your project's pyproject.toml
+[project.optional-dependencies]
+dev = [
+    "viberdash",
+    "pytest",          # Required for test coverage
+    "pytest-cov",      # Required for test coverage
+    "ruff",            # Required for style analysis
+    "pylint",          # Required for duplication detection
+    "radon",           # Required for complexity analysis
+    "vulture",         # Required for dead code detection
+    # ... your other dev dependencies
+]
 ```
 
-### Install with UV (Recommended)
+Then install your project with dev dependencies:
 
 ```bash
-# Install with UV
-uv pip install viberdash
+# Using pip
+pip install -e ".[dev]"
 
-# Or install directly from GitHub
-uv pip install git+https://github.com/johannhartmann/viberdash.git
+# Using uv
+uv pip install -e ".[dev]"
+
+# Using poetry
+poetry install --with dev
+
+# Using pdm
+pdm install --dev
 ```
 
-### Install with pip
+### Quick Test Installation
+
+For a quick test without modifying your project:
 
 ```bash
-# Install from PyPI
+# In your project's virtual environment
 pip install viberdash
 
-# Or install from GitHub
-pip install git+https://github.com/johannhartmann/viberdash.git
+# Or with uv
+uv pip install viberdash
 ```
 
-### Development Installation
+### Installing from Source
 
-For development or to run from source:
+To contribute to ViberDash or run the latest development version:
 
 ```bash
 # Clone the repository
 git clone https://github.com/johannhartmann/viberdash.git
 cd viberdash
 
-# Using Nix (recommended for development - includes all tools)
+# Using Nix (includes all required tools)
 nix develop
-python -m viberdash.vibescan
+python -m viberdash.vibescan monitor --source-dir /path/to/your/project
 
-# Or using UV (for testing end-user experience)
-uv venv
-source .venv/bin/activate  # On Unix/macOS
-uv pip install -e ".[dev]"
-
-# Or using pip
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
+# Or install in your project's environment
+cd /path/to/your/project
+source .venv/bin/activate  # or your virtual environment
+pip install -e /path/to/viberdash
 ```
 
 ## Usage
 
-⚠️ **Important**: ViberDash now uses a command-based interface. The main command is `monitor`:
+Run ViberDash from your project's root directory (where your `pyproject.toml` or tests are located):
 
 ### Basic Usage
 
 ```bash
-# Monitor the current directory
+# From your project directory with activated virtual environment
+cd /path/to/your/project
+source .venv/bin/activate  # or your activation method
+
+# Monitor current directory
 viberdash monitor
 
-# Monitor a specific directory
-viberdash monitor --source-dir /path/to/your/project
+# Monitor a specific subdirectory
+viberdash monitor --source-dir src/
 
 # Set custom update interval (default: 180 seconds)
 viberdash monitor --interval 30
 
 # Use a specific config file
-viberdash monitor --config /path/to/pyproject.toml
+viberdash monitor --config custom-config.toml
 ```
 
 ### Command Line Options
@@ -163,44 +193,83 @@ good = 80.0     # Above this = green
 bad = 60.0      # Below this = red
 ```
 
-### 2. Project Requirements
+### 2. Required Analysis Tools
 
-For ViberDash to work properly, your project should have:
+ViberDash runs the following tools to analyze your code. They must be installed in the same environment as ViberDash:
 
-- **Tests using pytest**: ViberDash runs `pytest` to calculate live coverage
-- **A test directory**: Usually `tests/` with test files
-- **Python 3.12+**: Required for ViberDash itself
+| Tool | Purpose | Required For |
+|------|---------|--------------|
+| `pytest` + `pytest-cov` | Test coverage | Coverage metrics |
+| `radon` | Complexity & maintainability | Complexity metrics |
+| `ruff` | Style checking & docs | Style & documentation metrics |
+| `pylint` | Code duplication | Duplication metrics |
+| `vulture` | Dead code detection | Dead code metrics |
 
-⚠️ **Critical for Test Coverage**: To enable ViberDash to run your tests and calculate coverage, you must install ViberDash and its dependencies in your project's development environment:
+If any tool is missing, its metrics will show as 0 or unavailable.
 
-```toml
-# In your project's pyproject.toml
-[project.optional-dependencies]
-dev = [
-    "viberdash",  # Add this to enable test coverage monitoring
-    # your other dev dependencies...
-]
+### 3. Making ViberDash Work
 
-# Or if using [tool.uv]
-[tool.uv]
-dev-dependencies = [
-    "viberdash",  # Add this to enable test coverage monitoring
-    # your other dev dependencies...
-]
-```
+Since ViberDash needs to execute these tools on your code, it must be installed in your project's development environment:
 
-Then install with dev dependencies:
 ```bash
-# Using pip
-pip install -e ".[dev]"
+# ❌ Won't work - isolated environment
+pipx install viberdash
+viberdash monitor  # Can't find pytest, ruff, etc.
 
-# Or using uv
-uv pip install -e ".[dev]"
+# ✅ Works - same environment as your tools
+source .venv/bin/activate
+pip install viberdash
+viberdash monitor  # Can access all your dev tools
 ```
 
 This ensures that when ViberDash runs `pytest` in your project directory, all necessary dependencies are available.
 
-### 3. Running ViberDash
+### 3. Example: Adding ViberDash to Your Project
+
+Here's a complete example for different package managers:
+
+#### Using pip/setuptools
+
+```toml
+# pyproject.toml
+[project.optional-dependencies]
+dev = [
+    "viberdash",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+    "pylint>=3.0",
+    "radon>=6.0",
+    "vulture>=2.7",
+]
+```
+
+#### Using Poetry
+
+```toml
+# pyproject.toml
+[tool.poetry.group.dev.dependencies]
+viberdash = "^0.1.0"
+pytest = "^7.0"
+pytest-cov = "^4.0"
+ruff = "^0.1.0"
+# ... etc
+```
+
+#### Using uv
+
+```toml
+# pyproject.toml
+[tool.uv]
+dev-dependencies = [
+    "viberdash>=0.1.0",
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    # ... etc
+]
+```
+
+### 4. Running ViberDash
 
 From your project root:
 
