@@ -72,7 +72,7 @@ class DashboardUI:
                 timestamp = datetime.now()
 
         header_text = Text()
-        header_text.append("ViberDash", style="bold cyan")
+        header_text.append("🤖📊 ViberDash", style="bold cyan")
         header_text.append(" - Live Code Quality Metrics\n", style="white")
         header_text.append(
             f"Last updated: {timestamp.strftime('%Y-%m-%d %H:%M:%S')}",

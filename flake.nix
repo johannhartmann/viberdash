@@ -1,5 +1,5 @@
 {
-  description = "ViberDash - A terminal dashboard for Python code quality metrics";
+  description = "🤖📊 ViberDash - A terminal dashboard for Python code quality metrics";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";

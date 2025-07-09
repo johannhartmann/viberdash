@@ -1,7 +1,7 @@
 [project]
 name = "viberdash"
 version = "0.1.0"
-description = "A terminal dashboard for Python code quality metrics"
+description = "🤖📊 ViberDash - A terminal dashboard for Python code quality metrics"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.12"

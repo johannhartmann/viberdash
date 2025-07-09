@@ -52,7 +52,7 @@ class ViberDashRunner:
 
         """
         self.console.print(
-            f"[green]Starting ViberDash monitoring on:[/green] {self.source_dir}"
+            f"[green]Starting 🤖📊 ViberDash monitoring on:[/green] {self.source_dir}"
         )
         self.console.print(f"[green]Update interval:[/green] {interval} seconds")
         self.console.print(
@@ -121,7 +121,7 @@ def load_config() -> dict[str, Any]:
 
 @click.group()
 def cli() -> None:
-    """ViberDash main entry point."""
+    """🤖📊 ViberDash main entry point."""
     pass
 
 
@@ -147,7 +147,7 @@ def cli() -> None:
     help="Path to configuration file (default: pyproject.toml)",
 )
 def monitor(source_dir: Path | None, interval: int, config: Path | None) -> None:
-    """ViberDash - Real-time code quality monitoring dashboard.
+    """🤖📊 ViberDash - Real-time code quality monitoring dashboard.
 
     Monitor your Python codebase with live metrics including complexity,
     maintainability, test coverage, and code duplication.
@@ -157,9 +157,7 @@ def monitor(source_dir: Path | None, interval: int, config: Path | None) -> None
     # Print banner
     console.print(
         """
-[bold cyan]f  ffTW TPWTfWTPWTPWf f
-ZWT]Q`iWQc  QQ`PcZPW`Pc
- Z] iZP]ZP]Pi]i iZP]i i[/bold cyan]
+[bold cyan]🤖📊 ViberDash[/bold cyan]
 [dim]Real-time Code Quality Dashboard[/dim]
 """
     )
