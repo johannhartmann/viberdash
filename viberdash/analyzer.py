@@ -1,5 +1,6 @@
 """Code analysis engine that runs various tools and collects metrics."""
 
+import fnmatch
 import json
 import logging
 import subprocess
@@ -8,17 +9,214 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import pathspec
+
 logger = logging.getLogger(__name__)
 
 
 class CodeAnalyzer:
     """Runs code analysis tools and collects metrics."""
 
-    def __init__(self, source_dir: Path):
-        """Initialize analyzer with source directory."""
+    def __init__(self, source_dir: Path, config: dict[str, Any] | None = None):
+        """Initialize analyzer with source directory and configuration."""
         self.source_dir = Path(source_dir).resolve()
         if not self.source_dir.exists():
             raise ValueError(f"Source directory does not exist: {self.source_dir}")
+
+        self.config = config or {}
+        self.exclude_patterns = self.config.get("exclude_patterns", [])
+        self.respect_gitignore = self.config.get("respect_gitignore", True)
+
+        # Create pathspec for gitignore patterns if requested
+        self.gitignore_spec: pathspec.PathSpec | None = None
+        if self.respect_gitignore:
+            self._load_gitignore_patterns()
+
+    def _load_gitignore_patterns(self) -> None:
+        """Load patterns from .gitignore file if it exists."""
+        # Collect all gitignore patterns from repo root to source dir
+        # Note: This doesn't perfectly replicate git's behavior
+        gitignore_patterns = []
+
+        # Find all .gitignore files from source_dir up to repository root
+        gitignore_files = self._find_gitignore_files()
+
+        for gitignore_path in gitignore_files:
+            try:
+                with open(gitignore_path, encoding="utf-8") as f:
+                    # For subdirectory .gitignore files, we need to adjust patterns
+                    # to be relative to the source directory
+                    base_dir = gitignore_path.parent
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith("#"):
+                            if base_dir != self.source_dir:
+                                # Adjust pattern to be relative to source_dir
+                                try:
+                                    rel_dir = base_dir.relative_to(self.source_dir)
+                                    # Prepend the relative directory path
+                                    if line.startswith("/"):
+                                        # Absolute path in gitignore
+                                        adjusted = str(rel_dir / line[1:])
+                                    else:
+                                        # Relative pattern - applies to subdirs
+                                        adjusted = str(rel_dir / line)
+                                    gitignore_patterns.append(adjusted + "\n")
+                                except ValueError:
+                                    # If base_dir is not under source_dir, use as-is
+                                    gitignore_patterns.append(line + "\n")
+                            else:
+                                gitignore_patterns.append(line + "\n")
+            except Exception as e:
+                logger.debug(f"Could not load .gitignore from {gitignore_path}: {e}")
+
+        if gitignore_patterns:
+            # Create PathSpec from all collected patterns
+            self.gitignore_spec = pathspec.PathSpec.from_lines(
+                "gitwildmatch", gitignore_patterns
+            )
+
+    def _find_gitignore_files(self) -> list[Path]:
+        """Find all .gitignore files from source directory up to repository root."""
+        gitignore_files = []
+
+        # First, find the repository root (where .git directory is)
+        repo_root = self._find_repo_root()
+        if not repo_root:
+            # If no repo root found, just check source directory
+            gitignore = self.source_dir / ".gitignore"
+            if gitignore.exists():
+                gitignore_files.append(gitignore)
+            # Also check for gitignore files in subdirectories
+            for gitignore in self.source_dir.rglob(".gitignore"):
+                if gitignore not in gitignore_files:
+                    gitignore_files.append(gitignore)
+            return gitignore_files
+
+        # Collect .gitignore files from repo root down to source directory
+        current = self.source_dir
+        while True:
+            gitignore = current / ".gitignore"
+            if gitignore.exists():
+                gitignore_files.append(gitignore)
+
+            if current == repo_root:
+                break
+
+            parent = current.parent
+            if parent == current:  # Reached filesystem root
+                break
+            current = parent
+
+        # Also find .gitignore files in subdirectories of source_dir
+        for gitignore in self.source_dir.rglob(".gitignore"):
+            if gitignore not in gitignore_files:
+                gitignore_files.append(gitignore)
+
+        # Return in order from repo root to source directory, then subdirectories
+        return list(reversed(gitignore_files))
+
+    def _find_repo_root(self) -> Path | None:
+        """Find the repository root by looking for .git directory."""
+        current = self.source_dir
+        while True:
+            if (current / ".git").exists():
+                return current
+
+            parent = current.parent
+            if parent == current:  # Reached filesystem root
+                return None
+            current = parent
+
+    def _should_exclude_path(self, path: Path) -> bool:
+        """Check if a path should be excluded based on patterns."""
+        # Convert to relative path from source_dir for pattern matching
+        try:
+            rel_path = path.relative_to(self.source_dir)
+        except ValueError:
+            # Path is not under source_dir
+            return True
+
+        path_str = str(rel_path)
+        path_parts = path_str.split("/")
+
+        # Check against exclude patterns
+        for pattern in self.exclude_patterns:
+            # Check if any part of the path matches the pattern
+            for part in path_parts:
+                if fnmatch.fnmatch(part, pattern):
+                    return True
+            # Also check the full path
+            if fnmatch.fnmatch(path_str, pattern):
+                return True
+
+        # Check against gitignore patterns using pathspec
+        if self.respect_gitignore and self.gitignore_spec:
+            # For gitignore, we need to check from the perspective of the repo root
+            repo_root = self._find_repo_root()
+            if repo_root:
+                try:
+                    # Get path relative to repo root for gitignore matching
+                    repo_rel_path = path.relative_to(repo_root)
+                    if self.gitignore_spec.match_file(str(repo_rel_path)):
+                        return True
+                except ValueError:
+                    # Path is not under repo root, use source-relative path
+                    if self.gitignore_spec.match_file(path_str):
+                        return True
+            else:
+                # No repo root, use source-relative path
+                if self.gitignore_spec.match_file(path_str):
+                    return True
+
+        return False
+
+    def _get_python_files(self) -> list[Path]:
+        """Get all Python files that should be analyzed (after filtering)."""
+        all_files = list(self.source_dir.rglob("*.py"))
+        return [f for f in all_files if not self._should_exclude_path(f)]
+
+    def _create_exclude_args(self, tool_name: str) -> list[str]:
+        """Create exclusion arguments for different tools."""
+        exclude_args = []
+
+        # Combine exclude patterns with gitignore patterns
+        all_patterns = list(self.exclude_patterns)
+
+        # Add gitignore patterns if available
+        if self.respect_gitignore and self.gitignore_spec:
+            # Extract patterns from pathspec (these are already in gitignore format)
+            # We'll add common gitignore patterns that tools understand
+            common_gitignore_patterns = [
+                ".git",
+                ".venv",
+                "venv",
+                "__pycache__",
+                "*.pyc",
+                ".mypy_cache",
+                ".pytest_cache",
+                ".coverage",
+                "*.egg-info",
+                "build",
+                "dist",
+                "node_modules",
+            ]
+            all_patterns.extend(common_gitignore_patterns)
+
+        # Remove duplicates while preserving order
+        all_patterns = list(dict.fromkeys(all_patterns))
+
+        if tool_name in ["radon", "vulture"]:
+            # These tools support --exclude parameter
+            if all_patterns:
+                exclude_args.extend(["--exclude", ",".join(all_patterns)])
+
+        elif tool_name == "ruff" and all_patterns:
+            # Ruff uses --extend-exclude
+            # Ruff expects patterns separated by commas
+            exclude_args.extend(["--extend-exclude", ",".join(all_patterns)])
+
+        return exclude_args
 
     def run_analysis(self) -> dict[str, Any]:
         """Run all analysis tools and return aggregated metrics.
@@ -105,6 +303,7 @@ class CodeAnalyzer:
                 "-j",
                 "-a",
             ]
+            cmd.extend(self._create_exclude_args("radon"))
             result = self._run_tool(cmd)
 
             if result.returncode != 0:
@@ -158,6 +357,7 @@ class CodeAnalyzer:
         """Analyze maintainability index using radon."""
         try:
             cmd = [sys.executable, "-m", "radon", "mi", str(self.source_dir), "-j"]
+            cmd.extend(self._create_exclude_args("radon"))
             result = self._run_tool(cmd)
 
             if result.returncode != 0:
@@ -208,15 +408,44 @@ class CodeAnalyzer:
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".pylintrc", delete=False
         ) as f:
-            f.write(
-                """[MESSAGES CONTROL]
+            # Build ignore patterns for pylint
+            ignore_patterns = list(self.exclude_patterns)
+
+            # Add common gitignore patterns if gitignore is respected
+            if self.respect_gitignore and self.gitignore_spec:
+                common_gitignore_patterns = [
+                    ".git",
+                    ".venv",
+                    "venv",
+                    "__pycache__",
+                    "*.pyc",
+                    ".mypy_cache",
+                    ".pytest_cache",
+                    ".coverage",
+                    "*.egg-info",
+                    "build",
+                    "dist",
+                    "node_modules",
+                ]
+                ignore_patterns.extend(common_gitignore_patterns)
+
+            # Remove duplicates while preserving order
+            ignore_patterns = list(dict.fromkeys(ignore_patterns))
+
+            pylintrc_content = """[MESSAGES CONTROL]
 disable=all
 enable=duplicate-code
 
 [REPORTS]
 output-format=json
 """
-            )
+
+            if ignore_patterns:
+                pylintrc_content += (
+                    f"\n[MASTER]\nignore-patterns={','.join(ignore_patterns)}\n"
+                )
+
+            f.write(pylintrc_content)
             return f.name
 
     def _run_pylint_duplication(
@@ -318,6 +547,8 @@ output-format=json
         if whitelist_path.exists():
             cmd.append(str(whitelist_path))
 
+        cmd.extend(self._create_exclude_args("vulture"))
+
         return self._run_tool(cmd)
 
     def _count_vulture_findings(self, output: str) -> int:
@@ -366,7 +597,10 @@ output-format=json
         ]
 
         if select:
-            cmd.insert(-1, f"--select={select}")
+            cmd.extend(["--select", select])
+
+        # Add exclusions
+        cmd.extend(self._create_exclude_args("ruff"))
 
         result = self._run_tool(cmd)
         violations = self._parse_json_output(result.stdout, [])
@@ -418,6 +652,7 @@ output-format=json
     def _get_line_counts_from_radon(self) -> dict[str, int]:
         """Get line counts using radon raw metrics."""
         cmd = [sys.executable, "-m", "radon", "raw", str(self.source_dir), "-j"]
+        cmd.extend(self._create_exclude_args("radon"))
         result = self._run_tool(cmd)
 
         if result.returncode != 0:
@@ -461,7 +696,7 @@ output-format=json
     def _count_lines(self) -> int:
         """Count total lines in Python files."""
         total = 0
-        for py_file in self.source_dir.rglob("*.py"):
+        for py_file in self._get_python_files():
             try:
                 with open(py_file, encoding="utf-8") as f:
                     total += len(f.readlines())
@@ -476,7 +711,7 @@ output-format=json
         regex = re.compile(pattern, re.MULTILINE)
         count = 0
 
-        for py_file in self.source_dir.rglob("*.py"):
+        for py_file in self._get_python_files():
             try:
                 with open(py_file, encoding="utf-8") as f:
                     content = f.read()

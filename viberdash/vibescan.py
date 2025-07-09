@@ -26,7 +26,7 @@ class ViberDashRunner:
         self.console = Console()
 
         # Initialize components
-        self.analyzer = CodeAnalyzer(self.source_dir)
+        self.analyzer = CodeAnalyzer(self.source_dir, config=self.config)
         self.storage = MetricsStorage()
         self.ui = DashboardUI(thresholds=self.config.get("thresholds"))
 
@@ -190,12 +190,22 @@ ZWT]Q`iWQc  QQ`PcZPW`Pc
         sys.exit(1)
 
     # Check if it contains Python files
-    py_files = list(source_dir.rglob("*.py"))
+    # Create a temporary analyzer to check filtered file count
+    temp_analyzer = CodeAnalyzer(source_dir, viberdash_config)
+    py_files = temp_analyzer._get_python_files()
     if not py_files:
         console.print(f"[red]Error: No Python files found in: {source_dir}[/red]")
+        console.print(
+            "[yellow]Note: Files may be excluded by patterns in config[/yellow]"
+        )
         sys.exit(1)
 
-    console.print(f"[green]Found {len(py_files)} Python files to analyze[/green]\n")
+    console.print(f"[green]Found {len(py_files)} Python files to analyze[/green]")
+    if viberdash_config.get("exclude_patterns"):
+        patterns = viberdash_config["exclude_patterns"][:5]
+        suffix = "..." if len(viberdash_config["exclude_patterns"]) > 5 else ""
+        console.print(f"[dim](excluding patterns: {', '.join(patterns)}{suffix})[/dim]")
+    console.print()
 
     # Create and run the application
     try:
