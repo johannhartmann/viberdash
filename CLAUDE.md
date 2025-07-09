@@ -101,7 +101,30 @@ CLI → ViberDashRunner → CodeAnalyzer → MetricsStorage → DashboardUI
 
 ### Configuration
 
-Thresholds configured in `pyproject.toml` under `[tool.viberdash.thresholds]`:
+Configuration in `pyproject.toml` under `[tool.viberdash]`:
+
+#### Exclusion Patterns
+Control which files are analyzed:
+```toml
+[tool.viberdash]
+# File patterns to exclude (glob patterns)
+exclude_patterns = [
+    "__pycache__",     # Python cache directories
+    "*.pyc",           # Compiled Python files
+    ".venv",           # Virtual environments
+    "build",           # Build directories
+    "*.generated.py",  # Generated files
+    # Add custom patterns as needed
+]
+
+# Whether to respect .gitignore file
+respect_gitignore = true
+```
+
+The default configuration excludes common directories like virtual environments, caches, and build artifacts. You can override or extend these patterns in your project's `pyproject.toml`.
+
+#### Metric Thresholds
+Configure visualization thresholds under `[tool.viberdash.thresholds]`:
 - Each metric has `good` and `bad` thresholds
 - Values between thresholds show as yellow
 - Can override with custom config file via `--config`

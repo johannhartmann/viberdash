@@ -1,4 +1,4 @@
-# ViberDash 🚀
+# 🤖📊 ViberDash
 
 A real-time terminal dashboard for monitoring Python code quality metrics. ViberDash continuously analyzes your codebase and displays key metrics in a beautiful, auto-updating terminal interface.
 
