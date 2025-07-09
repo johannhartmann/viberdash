@@ -28,6 +28,7 @@ dependencies = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "vulture>=2.7",
+    "pathspec>=0.11.0",
 ]
 
 [project.optional-dependencies]
@@ -126,6 +127,74 @@ exclude_lines = [
 [tool.viberdash]
 # The directory to analyze
 source_dir = "viberdash/"
+
+# File patterns to exclude from analysis (glob patterns)
+# These patterns are relative to the source_dir
+exclude_patterns = [
+    # Python cache and compiled files
+    "__pycache__",
+    "*.pyc",
+    "*.pyo",
+    "*.pyd",
+
+    # Virtual environments
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+
+    # Build and distribution
+    "build",
+    "dist",
+    "*.egg-info",
+    ".eggs",
+
+    # Testing and coverage
+    ".tox",
+    ".nox",
+    ".pytest_cache",
+    ".coverage",
+    "htmlcov",
+
+    # Type checking and linting caches
+    ".mypy_cache",
+    ".ruff_cache",
+    ".dmypy.json",
+    "dmypy.json",
+
+    # Version control
+    ".git",
+    ".hg",
+    ".svn",
+
+    # IDE and editor files
+    ".idea",
+    ".vscode",
+    "*.swp",
+    "*.swo",
+
+    # OS files
+    ".DS_Store",
+    "Thumbs.db",
+
+    # Node modules (for mixed projects)
+    "node_modules",
+
+    # Jupyter
+    ".ipynb_checkpoints",
+
+    # Temporary files
+    "*.tmp",
+    "*.temp",
+    "*.bak",
+
+    # Generated files
+    "*.generated.py",
+    "*_pb2.py",  # Protocol buffers
+]
+
+# Whether to respect .gitignore file (if it exists)
+respect_gitignore = true
 
 # Thresholds for metric visualization
 [tool.viberdash.thresholds.cyclomatic_complexity]

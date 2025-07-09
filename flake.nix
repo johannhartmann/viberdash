@@ -30,6 +30,7 @@
           rich
           click
           tomli
+          pathspec
 
           # Analysis tools that will be wrapped
           radon
@@ -70,7 +71,7 @@
           ];
 
           shellHook = ''
-            echo "🚀 ViberDash Development Environment"
+            echo "🤖📊 ViberDash Development Environment"
             echo "──────────────────────────────────"
             echo "Python: ${python.version}"
             echo ""
@@ -90,9 +91,11 @@
               echo "Installing pre-commit hooks..."
               pre-commit install 2>/dev/null && echo "✓ Pre-commit hooks installed" || echo "⚠️  Failed to install pre-commit hooks"
             fi
+            alias python="${pythonEnv}/bin/python3.12"
+            alias python3="${pythonEnv}/bin/python3.12"
+            alias pip="${pythonEnv}/bin/pip3.12"
             echo ""
           '';
-
           # Environment variables
           PYTHONPATH = ".";
           VIBERDASH_DEV = "1";
@@ -118,6 +121,7 @@
             rich
             click
             tomli
+            pathspec
             radon
             pylint
             coverage
