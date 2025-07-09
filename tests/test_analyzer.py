@@ -138,6 +138,15 @@ ignored_dir/
     # Should have processed files
     assert metrics["total_lines"] > 0
 
+    # Check that gitignore was loaded
+    assert analyzer.gitignore_spec is not None
+
+    # Check that ignored files are excluded
+    python_files = analyzer._get_python_files()
+    file_names = [f.name for f in python_files]
+    assert "main.py" in file_names or "example.py" in file_names
+    assert "ignored.py" not in file_names
+
 
 def test_tool_timeout_handling(temp_project):
     """Test tool timeout handling."""
@@ -261,3 +270,132 @@ def test_calculate_maintainability_density(temp_project):
     metrics = {"maintainability_index": 50.0, "total_code_lines": 0}
     result = analyzer._calculate_maintainability_density(metrics)
     assert result["maintainability_density"] == 50.0  # Falls back to MI
+
+
+def test_gitignore_complex_patterns(temp_project):
+    """Test complex gitignore patterns."""
+    # Create a .gitignore with complex patterns
+    gitignore = temp_project / ".gitignore"
+    gitignore.write_text(
+        """
+# Comments should be ignored
+*.pyc
+!important.pyc
+/build/
+**/logs
+*.log
+.venv/
+venv/
+temp_*
+"""
+    )
+
+    # Create directory structure
+    (temp_project / "src").mkdir()
+    (temp_project / "src" / "main.py").write_text("# main")
+    (temp_project / "src" / "test.pyc").write_text("# compiled")
+    (temp_project / "important.pyc").write_text("# important compiled")
+
+    build_dir = temp_project / "build"
+    build_dir.mkdir()
+    (build_dir / "output.py").write_text("# build output")
+
+    logs_dir = temp_project / "src" / "logs"
+    logs_dir.mkdir()
+    (logs_dir / "debug.py").write_text("# log file")
+
+    (temp_project / "error.log").write_text("# log")
+    (temp_project / "temp_file.py").write_text("# temp")
+
+    venv_dir = temp_project / ".venv"
+    venv_dir.mkdir()
+    (venv_dir / "lib.py").write_text("# venv file")
+
+    analyzer = CodeAnalyzer(temp_project)
+    python_files = analyzer._get_python_files()
+    file_paths = [str(f.relative_to(temp_project)) for f in python_files]
+
+    # Check expected files are included
+    assert "src/main.py" in file_paths or "example.py" in file_paths
+
+    # Check gitignored files are excluded
+    assert "src/test.pyc" not in file_paths
+    assert "build/output.py" not in file_paths
+    assert "src/logs/debug.py" not in file_paths
+    assert ".venv/lib.py" not in file_paths
+    assert "temp_file.py" not in file_paths
+
+    # Note: negation patterns (!important.pyc) are complex and may not work
+    # with simple pathspec matching
+
+
+def test_nested_gitignore_files(temp_project):
+    """Test handling of nested .gitignore files."""
+    # Create root .gitignore
+    root_gitignore = temp_project / ".gitignore"
+    root_gitignore.write_text("*.log\ntemp/\n")
+
+    # Create subdirectory with its own .gitignore
+    subdir = temp_project / "subdir"
+    subdir.mkdir()
+    sub_gitignore = subdir / ".gitignore"
+    sub_gitignore.write_text("local_*.py\n")
+
+    # Create files
+    (temp_project / "main.py").write_text("# main")
+    (temp_project / "debug.log").write_text("# log")
+
+    temp_dir = temp_project / "temp"
+    temp_dir.mkdir()
+    (temp_dir / "temp.py").write_text("# temp")
+
+    (subdir / "module.py").write_text("# module")
+    (subdir / "local_config.py").write_text("# local config")
+
+    # Test from root
+    analyzer = CodeAnalyzer(temp_project)
+    files = analyzer._get_python_files()
+    file_names = [f.name for f in files]
+
+    assert "main.py" in file_names or "example.py" in file_names
+    assert "module.py" in file_names
+    assert "temp.py" not in file_names
+    assert "local_config.py" not in file_names
+
+
+def test_gitignore_disabled(temp_project):
+    """Test analyzer with gitignore disabled."""
+    # Create .gitignore
+    gitignore = temp_project / ".gitignore"
+    gitignore.write_text("ignored.py\n")
+
+    # Create files
+    (temp_project / "main.py").write_text("# main")
+    (temp_project / "ignored.py").write_text("# should be ignored")
+
+    # Analyzer with gitignore disabled
+    config = {"respect_gitignore": False}
+    analyzer = CodeAnalyzer(temp_project, config)
+
+    files = analyzer._get_python_files()
+    file_names = [f.name for f in files]
+
+    # Both files should be included when gitignore is disabled
+    assert "main.py" in file_names or "example.py" in file_names
+    assert "ignored.py" in file_names
+
+
+def test_no_gitignore_file(temp_project):
+    """Test analyzer when no .gitignore file exists."""
+    # Don't create any .gitignore file
+    (temp_project / "main.py").write_text("# main")
+    (temp_project / "test.py").write_text("# test")
+
+    analyzer = CodeAnalyzer(temp_project)
+    assert analyzer.gitignore_spec is None
+
+    files = analyzer._get_python_files()
+    file_names = [f.name for f in files]
+
+    # All files should be included
+    assert len(file_names) >= 2
