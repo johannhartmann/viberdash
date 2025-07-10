@@ -189,7 +189,8 @@ def test_analyze_complexity_error_handling(temp_project):
             return original_run(cmd, *args, **kwargs)
 
         with patch("viberdash.analyzer.subprocess.run", side_effect=selective_mock):
-            metrics = analyzer._analyze_complexity(errors)
+            files = [str(f) for f in analyzer._get_python_files()]
+            metrics = analyzer._analyze_complexity(files, errors)
 
             # Should return defaults on parse error
             assert metrics["avg_complexity"] == 0
@@ -211,7 +212,8 @@ def test_analyze_maintainability_error_handling(temp_project):
         mock_run.return_value = mock_result
 
         # Test just the maintainability method directly
-        result = analyzer._analyze_maintainability(errors)
+        files = [str(f) for f in analyzer._get_python_files()]
+        result = analyzer._analyze_maintainability(files, errors)
         # The mock should cause JSON parsing to fail, returning 0
         assert result["maintainability_index"] == 0.0  # Should return 0 on error
         assert len(errors) == 0
@@ -246,7 +248,8 @@ def test_analyze_dead_code_error_handling(temp_project):
         mock_run.return_value = mock_result
 
         # Test just the dead code method directly
-        result = analyzer._analyze_dead_code(errors)
+        files = [str(f) for f in analyzer._get_python_files()]
+        result = analyzer._analyze_dead_code(files, errors)
         assert result["dead_code"] == 0.0  # Should return 0 on empty output
         assert len(errors) == 0
 
@@ -264,7 +267,8 @@ def test_analyze_style_violations_error_handling(temp_project):
         mock_run.return_value = mock_result
 
         # Test just the style issues method directly
-        result = analyzer._analyze_style_issues(errors)
+        files = [str(f) for f in analyzer._get_python_files()]
+        result = analyzer._analyze_style_issues(files, errors)
         assert result["style_violations"] == 0.0  # Should return 0 on parse error
         assert len(errors) == 0
 

@@ -1,6 +1,10 @@
 # Vulture whitelist for ViberDash
 # These are not actually dead code but used dynamically
 
+# Click CLI commands
+monitor
+test
+
 # SQLite row_factory attributes - used by SQLite to configure row return format
 _.row_factory
 

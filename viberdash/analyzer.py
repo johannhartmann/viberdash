@@ -176,48 +176,6 @@ class CodeAnalyzer:
         all_files = list(self.source_dir.rglob("*.py"))
         return [f for f in all_files if not self._should_exclude_path(f)]
 
-    def _create_exclude_args(self, tool_name: str) -> list[str]:
-        """Create exclusion arguments for different tools."""
-        exclude_args = []
-
-        # Combine exclude patterns with gitignore patterns
-        all_patterns = list(self.exclude_patterns)
-
-        # Add gitignore patterns if available
-        if self.respect_gitignore and self.gitignore_spec:
-            # Extract patterns from pathspec (these are already in gitignore format)
-            # We'll add common gitignore patterns that tools understand
-            common_gitignore_patterns = [
-                ".git",
-                ".venv",
-                "venv",
-                "__pycache__",
-                "*.pyc",
-                ".mypy_cache",
-                ".pytest_cache",
-                ".coverage",
-                "*.egg-info",
-                "build",
-                "dist",
-                "node_modules",
-            ]
-            all_patterns.extend(common_gitignore_patterns)
-
-        # Remove duplicates while preserving order
-        all_patterns = list(dict.fromkeys(all_patterns))
-
-        if tool_name in ["radon", "vulture"]:
-            # These tools support --exclude parameter
-            if all_patterns:
-                exclude_args.extend(["--exclude", ",".join(all_patterns)])
-
-        elif tool_name == "ruff" and all_patterns:
-            # Ruff uses --extend-exclude
-            # Ruff expects patterns separated by commas
-            exclude_args.extend(["--extend-exclude", ",".join(all_patterns)])
-
-        return exclude_args
-
     def run_analysis(self) -> tuple[dict[str, Any], list[dict[str, str]]]:
         """Run all analysis tools and return aggregated metrics and errors.
         Returns:
@@ -228,15 +186,25 @@ class CodeAnalyzer:
         metrics: dict[str, Any] = {}
         errors: list[dict[str, str]] = []
 
+        # Get the list of files to analyze
+        python_files = self._get_python_files()
+        if not python_files:
+            errors.append(
+                {"tool": "viberdash", "message": "No Python files found to analyze."}
+            )
+            return metrics, errors
+
+        file_paths_str = [str(f) for f in python_files]
+
         # Run each analysis tool
-        metrics.update(self._analyze_complexity(errors))
-        metrics.update(self._analyze_maintainability(errors))
-        metrics.update(self._analyze_duplication(errors))
+        metrics.update(self._analyze_complexity(file_paths_str, errors))
+        metrics.update(self._analyze_maintainability(file_paths_str, errors))
+        metrics.update(self._analyze_duplication(file_paths_str, errors))
         metrics.update(self._analyze_coverage(errors))
-        metrics.update(self._analyze_dead_code(errors))
-        metrics.update(self._analyze_style_issues(errors))
-        metrics.update(self._analyze_documentation(errors))
-        metrics.update(self._count_code_elements(errors))
+        metrics.update(self._analyze_dead_code(file_paths_str, errors))
+        metrics.update(self._analyze_style_issues(file_paths_str, errors))
+        metrics.update(self._analyze_documentation(file_paths_str, errors))
+        metrics.update(self._count_code_elements(python_files, errors))
 
         # Calculate maintainability density
         metrics.update(self._calculate_maintainability_density(metrics))
@@ -292,7 +260,24 @@ class CodeAnalyzer:
             return 0.0
         return min((count / total) * 100, 100.0)
 
-    def _analyze_complexity(self, errors: list[dict[str, str]]) -> dict[str, float]:
+    def _report_tool_error(
+        self,
+        errors: list[dict[str, str]],
+        tool_name: str,
+        result: subprocess.CompletedProcess,
+        context: str = "scan",
+    ) -> None:
+        """Append a detailed error message to the errors list."""
+        error_output = result.stderr.strip() or result.stdout.strip()
+        message = (
+            f"{tool_name.capitalize()} {context} failed (exit code"
+            f" {result.returncode}): {error_output[:200]}"
+        )
+        errors.append({"tool": tool_name, "message": message})
+
+    def _analyze_complexity(
+        self, files: list[str], errors: list[dict[str, str]]
+    ) -> dict[str, float]:
         """Analyze cyclomatic complexity using radon."""
         try:
             cmd = [
@@ -300,22 +285,14 @@ class CodeAnalyzer:
                 "-m",
                 "radon",
                 "cc",
-                str(self.source_dir),
+                *files,
                 "-j",
                 "-a",
             ]
-            cmd.extend(self._create_exclude_args("radon"))
             result = self._run_tool(cmd)
 
             if result.returncode != 0:
-                errors.append(
-                    {
-                        "tool": "radon",
-                        "message": (
-                            "Radon complexity scan failed:" f" {result.stderr[:200]}"
-                        ),
-                    }
-                )
+                self._report_tool_error(errors, "radon", result, context="complexity")
                 return self._default_complexity_metrics()
 
             data = self._parse_json_output(result.stdout, {})
@@ -366,23 +343,16 @@ class CodeAnalyzer:
         return complexities
 
     def _analyze_maintainability(
-        self, errors: list[dict[str, str]]
+        self, files: list[str], errors: list[dict[str, str]]
     ) -> dict[str, float]:
         """Analyze maintainability index using radon."""
         try:
-            cmd = [sys.executable, "-m", "radon", "mi", str(self.source_dir), "-j"]
-            cmd.extend(self._create_exclude_args("radon"))
+            cmd = [sys.executable, "-m", "radon", "mi", *files, "-j"]
             result = self._run_tool(cmd)
 
             if result.returncode != 0:
-                errors.append(
-                    {
-                        "tool": "radon",
-                        "message": (
-                            "Radon maintainability scan failed:"
-                            f" {result.stderr[:200]}"
-                        ),
-                    }
+                self._report_tool_error(
+                    errors, "radon", result, context="maintainability"
                 )
                 return {"maintainability_index": 0.0}
 
@@ -408,34 +378,22 @@ class CodeAnalyzer:
             return {"maintainability_index": sum(mi_values) / len(mi_values)}
         return {"maintainability_index": 0.0}
 
-    def _analyze_duplication(self, errors: list[dict[str, str]]) -> dict[str, float]:
+    def _analyze_duplication(
+        self, files: list[str], errors: list[dict[str, str]]
+    ) -> dict[str, float]:
         """Analyze code duplication using pylint."""
         try:
-            pylintrc_path = self._create_duplication_pylintrc()
+            result = self._run_pylint_duplication(files)
 
-            try:
-                result = self._run_pylint_duplication(pylintrc_path)
-
-                if result.returncode != 0:
-                    errors.append(
-                        {
-                            "tool": "pylint",
-                            "message": (
-                                "Pylint duplication scan failed:"
-                                f" {result.stderr[:200]}"
-                            ),
-                        }
-                    )
-                    return {"code_duplication": 0.0}
-
-                if result.stdout:
-                    messages = self._parse_json_output(result.stdout, [])
-                    return self._calculate_duplication_metrics(messages)
-
+            if result.returncode != 0:
+                self._report_tool_error(errors, "pylint", result, context="duplication")
                 return {"code_duplication": 0.0}
 
-            finally:
-                Path(pylintrc_path).unlink(missing_ok=True)
+            if result.stdout:
+                messages = self._parse_json_output(result.stdout, [])
+                return self._calculate_duplication_metrics(messages)
+
+            return {"code_duplication": 0.0}
 
         except Exception as e:
             logger.debug(f"Error analyzing duplication: {e}")
@@ -444,64 +402,33 @@ class CodeAnalyzer:
             )
             return {"code_duplication": 0.0}
 
-    def _create_duplication_pylintrc(self) -> str:
-        """Create temporary pylintrc for duplication checking."""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".pylintrc", delete=False
-        ) as f:
-            # Build ignore patterns for pylint
-            ignore_patterns = list(self.exclude_patterns)
-
-            # Add common gitignore patterns if gitignore is respected
-            if self.respect_gitignore and self.gitignore_spec:
-                common_gitignore_patterns = [
-                    ".git",
-                    ".venv",
-                    "venv",
-                    "__pycache__",
-                    "*.pyc",
-                    ".mypy_cache",
-                    ".pytest_cache",
-                    ".coverage",
-                    "*.egg-info",
-                    "build",
-                    "dist",
-                    "node_modules",
-                ]
-                ignore_patterns.extend(common_gitignore_patterns)
-
-            # Remove duplicates while preserving order
-            ignore_patterns = list(dict.fromkeys(ignore_patterns))
-
-            pylintrc_content = """[MESSAGES CONTROL]
+    def _run_pylint_duplication(self, files: list[str]) -> subprocess.CompletedProcess:
+        """Run pylint for duplication analysis."""
+        pylintrc_content = """[MESSAGES CONTROL]
 disable=all
 enable=duplicate-code
 
 [REPORTS]
 output-format=json
 """
-
-            if ignore_patterns:
-                pylintrc_content += (
-                    f"\n[MASTER]\nignore-patterns={','.join(ignore_patterns)}\n"
-                )
-
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".pylintrc", delete=False
+        ) as f:
             f.write(pylintrc_content)
-            return f.name
+            pylintrc_path = f.name
 
-    def _run_pylint_duplication(
-        self, pylintrc_path: str
-    ) -> subprocess.CompletedProcess:
-        """Run pylint for duplication analysis."""
-        cmd = [
-            sys.executable,
-            "-m",
-            "pylint",
-            str(self.source_dir),
-            f"--rcfile={pylintrc_path}",
-            "--output-format=json",
-        ]
-        return self._run_tool(cmd)
+        try:
+            cmd = [
+                sys.executable,
+                "-m",
+                "pylint",
+                *files,
+                f"--rcfile={pylintrc_path}",
+                "--output-format=json",
+            ]
+            return self._run_tool(cmd)
+        finally:
+            Path(pylintrc_path).unlink(missing_ok=True)
 
     def _calculate_duplication_metrics(self, messages: list) -> dict[str, float]:
         """Calculate duplication percentage from pylint messages."""
@@ -581,18 +508,15 @@ output-format=json
 
         return 0.0
 
-    def _analyze_dead_code(self, errors: list[dict[str, str]]) -> dict[str, float]:
+    def _analyze_dead_code(
+        self, files: list[str], errors: list[dict[str, str]]
+    ) -> dict[str, float]:
         """Analyze dead code using vulture."""
         try:
-            result = self._run_vulture()
+            result = self._run_vulture(files)
 
             if result.returncode != 0 and "confidence" not in result.stderr:
-                errors.append(
-                    {
-                        "tool": "vulture",
-                        "message": f"Vulture scan failed: {result.stderr[:200]}",
-                    }
-                )
+                self._report_tool_error(errors, "vulture", result)
                 return {"dead_code": 0.0}
 
             if not result.stdout.strip():
@@ -611,7 +535,7 @@ output-format=json
             )
             return {"dead_code": 0.0}
 
-    def _run_vulture(self) -> subprocess.CompletedProcess:
+    def _run_vulture(self, files: list[str]) -> subprocess.CompletedProcess:
         """Run vulture to find dead code.
 
         Returns:
@@ -619,12 +543,10 @@ output-format=json
 
         """
         whitelist_path = self.source_dir.parent / ".vulture_whitelist"
-        cmd = [sys.executable, "-m", "vulture", str(self.source_dir)]
+        cmd = [sys.executable, "-m", "vulture", *files]
 
         if whitelist_path.exists():
             cmd.append(str(whitelist_path))
-
-        cmd.extend(self._create_exclude_args("vulture"))
 
         return self._run_tool(cmd)
 
@@ -645,11 +567,11 @@ output-format=json
         return count
 
     def _analyze_style_issues(
-        self, errors: list[dict[str, str]]
+        self, files: list[str], errors: list[dict[str, str]]
     ) -> dict[str, float | int]:
         """Analyze code style issues using ruff."""
         try:
-            violations = self._run_ruff_check(errors)
+            violations = self._run_ruff_check(files, errors)
             total_issues = len(violations)
 
             total_lines = self._count_lines()
@@ -666,7 +588,7 @@ output-format=json
             return {"style_issues": 0, "style_violations": 0.0}
 
     def _run_ruff_check(
-        self, errors: list[dict[str, str]], select: str | None = None
+        self, files: list[str], errors: list[dict[str, str]], select: str | None = None
     ) -> list:
         """Run ruff and return violations."""
         cmd = [
@@ -674,34 +596,28 @@ output-format=json
             "-m",
             "ruff",
             "check",
+            *files,
             "--output-format=json",
-            str(self.source_dir),
         ]
 
         if select:
             cmd.extend(["--select", select])
 
-        # Add exclusions
-        cmd.extend(self._create_exclude_args("ruff"))
-
         result = self._run_tool(cmd)
 
         if result.returncode != 0 and "error:" in result.stderr.lower():
             # Ruff exits with non-zero code if issues are found, so check stderr
-            errors.append(
-                {
-                    "tool": "ruff",
-                    "message": f"Ruff scan failed: {result.stderr[:200]}",
-                }
-            )
+            self._report_tool_error(errors, "ruff", result)
             # Continue to parse violations even if exit code is non-zero
         violations = self._parse_json_output(result.stdout, [])
         return violations if isinstance(violations, list) else []
 
-    def _analyze_documentation(self, errors: list[dict[str, str]]) -> dict[str, float]:
+    def _analyze_documentation(
+        self, files: list[str], errors: list[dict[str, str]]
+    ) -> dict[str, float]:
         """Analyze documentation coverage using Ruff docstring checks."""
         try:
-            violations = self._run_ruff_check(errors, select="D")
+            violations = self._run_ruff_check(files, errors, select="D")
             total_doc_issues = len(violations)
 
             total_elements = self._count_pattern(r"^\s*(def|class)\s+\w+")
@@ -728,10 +644,14 @@ output-format=json
         # Higher issues = lower coverage
         return max(0, 100 - (issues / elements * 100))
 
-    def _count_code_elements(self, errors: list[dict[str, str]]) -> dict[str, int]:
+    def _count_code_elements(
+        self, files: list[Path], errors: list[dict[str, str]]
+    ) -> dict[str, int]:
         """Count lines, classes, and functions in the codebase."""
         try:
-            line_counts = self._get_line_counts_from_radon(errors)
+            line_counts = self._get_line_counts_from_radon(
+                [str(f) for f in files], errors
+            )
             total_classes = self._count_pattern(r"^class\s+\w+")
 
             return {
@@ -746,20 +666,14 @@ output-format=json
             return {"total_lines": 0, "total_code_lines": 0, "total_classes": 0}
 
     def _get_line_counts_from_radon(
-        self, errors: list[dict[str, str]]
+        self, files: list[str], errors: list[dict[str, str]]
     ) -> dict[str, int]:
         """Get line counts using radon raw metrics."""
-        cmd = [sys.executable, "-m", "radon", "raw", str(self.source_dir), "-j"]
-        cmd.extend(self._create_exclude_args("radon"))
+        cmd = [sys.executable, "-m", "radon", "raw", *files, "-j"]
         result = self._run_tool(cmd)
 
         if result.returncode != 0:
-            errors.append(
-                {
-                    "tool": "radon",
-                    "message": f"Radon line count scan failed: {result.stderr[:200]}",
-                }
-            )
+            self._report_tool_error(errors, "radon", result, context="line count")
             return {"total_lines": 0, "total_code_lines": 0}
 
         data = self._parse_json_output(result.stdout, {})
