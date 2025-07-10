@@ -71,6 +71,7 @@
           ];
 
           shellHook = ''
+            export PATH="${pythonEnv}/bin:$PATH"
             echo "🤖📊 ViberDash Development Environment"
             echo "──────────────────────────────────"
             echo "Python: ${python.version}"
@@ -91,9 +92,6 @@
               echo "Installing pre-commit hooks..."
               pre-commit install 2>/dev/null && echo "✓ Pre-commit hooks installed" || echo "⚠️  Failed to install pre-commit hooks"
             fi
-            alias python="${pythonEnv}/bin/python3.12"
-            alias python3="${pythonEnv}/bin/python3.12"
-            alias pip="${pythonEnv}/bin/pip3.12"
             echo ""
           '';
           # Environment variables
