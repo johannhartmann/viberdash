@@ -39,14 +39,16 @@ class DashboardUI:
         }
 
     def display_dashboard(
-        self, latest_metrics: dict[str, Any], history: list[dict[str, Any]]
+        self,
+        latest_metrics: dict[str, Any],
+        history: list[dict[str, Any]],
+        errors: list[dict[str, Any]],
     ) -> None:
         """Display the main dashboard with current metrics and trends.
-
         Args:
             latest_metrics: Most recent metrics data
             history: List of historical metrics (newest first)
-
+            errors: List of recent analysis errors
         """
         # Clear terminal
         self.console.clear()
@@ -56,6 +58,7 @@ class DashboardUI:
         layout.split_column(
             Layout(self._create_header(latest_metrics), size=4),
             Layout(self._create_metrics_table(latest_metrics, history)),
+            Layout(self._create_issues_panel(errors), size=7),
             Layout(self._create_footer(), size=3),
         )
 
@@ -229,6 +232,29 @@ class DashboardUI:
 
         return table
 
+    def _create_issues_panel(self, errors: list[dict[str, Any]]) -> Panel:
+        """Create a panel to display recent analysis errors."""
+        error_text = Text()
+        if not errors:
+            error_text.append(
+                "No recent issues found. Keep up the good work!", style="green"
+            )
+        else:
+            for error in errors:
+                tool = error.get("tool", "general")
+                message = error.get("message", "Unknown error")
+                tool_style = "bold yellow" if tool else "bold red"
+                error_text.append(f"[{tool_style}]{tool.upper()}:[/{tool_style}] ")
+                error_text.append(f"{message}\n")
+
+        return Panel(
+            error_text,
+            title="[bold red]Recent Issues[/bold red]",
+            box=box.ROUNDED,
+            style="red",
+            title_align="left",
+        )
+
     def _add_metric_row(
         self,
         table: Table,
@@ -241,6 +267,17 @@ class DashboardUI:
         suffix: str = "",
     ) -> None:
         """Add a metric row to the table with formatting."""
+        # Handle special case for test coverage failure
+        if threshold_key == "test_coverage" and current == -1.0:
+            table.add_row(
+                name,
+                "[bold red]Tests Failed[/bold red]",
+                "-",
+                "",
+                "[bold red]✗ Failed[/bold red]",
+            )
+            return
+
         # Format current value
         current_str = f"{current:.1f}{suffix}" if current is not None else "N/A"
 

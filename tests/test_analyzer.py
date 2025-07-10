@@ -60,7 +60,7 @@ def test_analyzer_init_invalid_dir():
 def test_run_analysis(temp_project):
     """Test running full analysis."""
     analyzer = CodeAnalyzer(temp_project)
-    metrics = analyzer.run_analysis()
+    metrics, errors = analyzer.run_analysis()
 
     # Check that metrics dict contains expected keys
     assert "avg_complexity" in metrics
@@ -75,6 +75,7 @@ def test_run_analysis(temp_project):
     assert metrics["total_lines"] > 0
     assert metrics["total_classes"] >= 1  # We have ExampleClass
     assert metrics["maintainability_density"] > 0  # Should be calculated
+    assert isinstance(errors, list)
 
 
 def test_count_lines(temp_project):
@@ -100,15 +101,20 @@ def test_run_analysis_with_errors(temp_project):
         # Make all tools fail
         mock_run.side_effect = subprocess.CalledProcessError(1, "tool")
 
-        metrics = analyzer.run_analysis()
+        with patch.object(
+            analyzer, "_analyze_coverage", return_value={"test_coverage": -1.0}
+        ) as mock_coverage:
+            metrics, errors = analyzer.run_analysis()
 
-        # Should return default values when tools fail
-        assert metrics["avg_complexity"] == 0
-        assert metrics["maintainability_index"] == 0
-        assert metrics["test_coverage"] >= 0  # May read from existing coverage.json
-        assert metrics["code_duplication"] == 0
-        assert metrics["dead_code"] == 0
-        assert metrics["style_violations"] == 0
+            # Should return default values when tools fail
+            assert metrics["avg_complexity"] == 0
+            assert metrics["maintainability_index"] == 0
+            assert metrics["test_coverage"] == -1.0
+            assert metrics["code_duplication"] == 0
+            assert metrics["dead_code"] == 0
+            assert metrics["style_violations"] == 0
+            assert len(errors) > 0
+            mock_coverage.assert_called_once()
 
 
 def test_gitignore_handling(temp_project):
@@ -133,7 +139,7 @@ ignored_dir/
 
     analyzer = CodeAnalyzer(temp_project)
     # Run analysis will process only non-ignored files
-    metrics = analyzer.run_analysis()
+    metrics, _ = analyzer.run_analysis()
 
     # Should have processed files
     assert metrics["total_lines"] > 0
@@ -157,15 +163,17 @@ def test_tool_timeout_handling(temp_project):
         mock_run.side_effect = subprocess.TimeoutExpired("cmd", 5)
 
         # Run analysis should handle timeouts gracefully
-        metrics = analyzer.run_analysis()
+        metrics, errors = analyzer.run_analysis()
 
         # Should return default values on timeout
         assert metrics["avg_complexity"] == 0
+        assert len(errors) > 0
 
 
 def test_analyze_complexity_error_handling(temp_project):
     """Test complexity analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
+    errors = []
 
     # Mock radon to return invalid JSON
     with patch("viberdash.analyzer.subprocess.run") as mock_run:
@@ -176,21 +184,24 @@ def test_analyze_complexity_error_handling(temp_project):
         original_run = subprocess.run
 
         def selective_mock(cmd, *args, **kwargs):
-            if "radon" in cmd[0]:
+            if "radon" in cmd:
                 return mock_run.return_value
             return original_run(cmd, *args, **kwargs)
 
         with patch("viberdash.analyzer.subprocess.run", side_effect=selective_mock):
-            metrics = analyzer.run_analysis()
+            metrics = analyzer._analyze_complexity(errors)
 
             # Should return defaults on parse error
             assert metrics["avg_complexity"] == 0
             assert metrics["max_complexity"] == 0
+            # No error is reported here, it just returns default metrics
+            assert len(errors) == 0
 
 
 def test_analyze_maintainability_error_handling(temp_project):
     """Test maintainability analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
+    errors = []
 
     # Mock subprocess.run to return invalid JSON for radon mi
     with patch("viberdash.analyzer.subprocess.run") as mock_run:
@@ -200,9 +211,10 @@ def test_analyze_maintainability_error_handling(temp_project):
         mock_run.return_value = mock_result
 
         # Test just the maintainability method directly
-        result = analyzer._analyze_maintainability()
+        result = analyzer._analyze_maintainability(errors)
         # The mock should cause JSON parsing to fail, returning 0
         assert result["maintainability_index"] == 0.0  # Should return 0 on error
+        assert len(errors) == 0
 
 
 def test_analyze_coverage_no_coverage_file(temp_project):
@@ -216,13 +228,15 @@ def test_analyze_coverage_no_coverage_file(temp_project):
 
     # Mock Path.cwd to return temp_project so it looks for coverage.json there
     with patch("viberdash.analyzer.Path.cwd", return_value=temp_project):
-        metrics = analyzer.run_analysis()
+        metrics, errors = analyzer.run_analysis()
         assert metrics["test_coverage"] == 0  # Should return 0 when no coverage data
+        assert len(errors) > 0  # Should have an error about pytest failing
 
 
 def test_analyze_dead_code_error_handling(temp_project):
     """Test dead code analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
+    errors = []
 
     # Mock subprocess.run to return empty output for vulture
     with patch("viberdash.analyzer.subprocess.run") as mock_run:
@@ -232,13 +246,15 @@ def test_analyze_dead_code_error_handling(temp_project):
         mock_run.return_value = mock_result
 
         # Test just the dead code method directly
-        result = analyzer._analyze_dead_code()
+        result = analyzer._analyze_dead_code(errors)
         assert result["dead_code"] == 0.0  # Should return 0 on empty output
+        assert len(errors) == 0
 
 
 def test_analyze_style_violations_error_handling(temp_project):
     """Test style violations analysis error handling."""
     analyzer = CodeAnalyzer(temp_project)
+    errors = []
 
     # Mock subprocess.run to return invalid JSON for ruff
     with patch("viberdash.analyzer.subprocess.run") as mock_run:
@@ -248,8 +264,9 @@ def test_analyze_style_violations_error_handling(temp_project):
         mock_run.return_value = mock_result
 
         # Test just the style issues method directly
-        result = analyzer._analyze_style_issues()
+        result = analyzer._analyze_style_issues(errors)
         assert result["style_violations"] == 0.0  # Should return 0 on parse error
+        assert len(errors) == 0
 
 
 def test_calculate_maintainability_density(temp_project):

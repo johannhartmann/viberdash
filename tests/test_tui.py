@@ -168,9 +168,10 @@ def test_display_dashboard(capsys):
     }
 
     history = [latest]
+    errors = []
 
     # Should not raise exception
-    ui.display_dashboard(latest, history)
+    ui.display_dashboard(latest, history, errors)
 
     # Verify console methods were called
     assert ui.console.clear.called

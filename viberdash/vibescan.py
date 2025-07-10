@@ -85,17 +85,18 @@ class ViberDashRunner:
             self.ui.show_scanning()
 
             # Run analysis
-            metrics = self.analyzer.run_analysis()
+            metrics, errors = self.analyzer.run_analysis()
 
             # Save to database
-            self.storage.save_metrics(metrics)
+            self.storage.save_metrics(metrics, errors)
 
             # Get history for trends
             history = self.storage.get_history(limit=20)
+            recent_errors = self.storage.get_recent_errors(limit=5)
 
             # Update display
             if history:
-                self.ui.display_dashboard(history[0], history)
+                self.ui.display_dashboard(history[0], history, recent_errors)
 
         except Exception as e:
             self.console.print(f"[red]Error during scan: {e}[/red]")

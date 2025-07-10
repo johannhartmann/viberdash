@@ -53,9 +53,16 @@ def test_save_metrics(storage):
         "total_classes": 5,
         "total_lines": 500,
     }
+    errors = [{"tool": "pytest", "message": "Test failed"}]
 
-    record_id = storage.save_metrics(metrics)
+    record_id = storage.save_metrics(metrics, errors)
     assert record_id > 0
+
+    # Verify error was saved
+    recent_errors = storage.get_recent_errors()
+    assert len(recent_errors) == 1
+    assert recent_errors[0]["tool"] == "pytest"
+    assert recent_errors[0]["message"] == "Test failed"
 
 
 def test_get_latest(storage):
@@ -66,11 +73,11 @@ def test_get_latest(storage):
     metrics1 = {"avg_complexity": 5.0}
     metrics2 = {"avg_complexity": 6.0}
 
-    storage.save_metrics(metrics1)
+    storage.save_metrics(metrics1, [])
     time.sleep(
         1.1
     )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
-    storage.save_metrics(metrics2)
+    storage.save_metrics(metrics2, [])
 
     latest = storage.get_latest()
     assert latest is not None
@@ -83,7 +90,7 @@ def test_get_history(storage):
 
     # Save multiple metrics
     for i in range(5):
-        storage.save_metrics({"avg_complexity": float(i)})
+        storage.save_metrics({"avg_complexity": float(i)}, [])
         time.sleep(
             1.1
         )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
@@ -101,11 +108,11 @@ def test_get_previous(storage):
     import time
 
     # Save two metrics
-    storage.save_metrics({"avg_complexity": 5.0})
+    storage.save_metrics({"avg_complexity": 5.0}, [])
     time.sleep(
         1.1
     )  # Ensure different timestamps (SQLite CURRENT_TIMESTAMP has second precision)
-    storage.save_metrics({"avg_complexity": 6.0})
+    storage.save_metrics({"avg_complexity": 6.0}, [])
 
     previous = storage.get_previous()
     assert previous is not None
@@ -132,7 +139,7 @@ def test_row_to_dict_with_raw_data(storage):
     }
 
     # Save metrics
-    storage.save_metrics(metrics)
+    storage.save_metrics(metrics, [])
 
     # Get the latest entry
     latest = storage.get_latest()
@@ -181,7 +188,7 @@ def test_get_latest_empty_db(storage):
 
 def test_get_previous_single_entry(storage):
     """Test get_previous with only one entry."""
-    storage.save_metrics({"avg_complexity": 5.0})
+    storage.save_metrics({"avg_complexity": 5.0}, [])
 
     previous = storage.get_previous()
     assert previous is None  # No second entry exists

@@ -96,11 +96,12 @@ def test_perform_scan(
     """Test performing a single scan."""
     # Set up mocks
     mock_analyzer = MagicMock()
-    mock_analyzer.run_analysis.return_value = {"avg_complexity": 5.0}
+    mock_analyzer.run_analysis.return_value = ({"avg_complexity": 5.0}, [])
     mock_analyzer_cls.return_value = mock_analyzer
 
     mock_storage = MagicMock()
     mock_storage.get_history.return_value = [{"avg_complexity": 5.0}]
+    mock_storage.get_recent_errors.return_value = []
     mock_storage_cls.return_value = mock_storage
 
     mock_ui = MagicMock()
@@ -112,8 +113,9 @@ def test_perform_scan(
     # Verify calls
     mock_ui.show_scanning.assert_called_once()
     mock_analyzer.run_analysis.assert_called_once()
-    mock_storage.save_metrics.assert_called_once_with({"avg_complexity": 5.0})
+    mock_storage.save_metrics.assert_called_once_with({"avg_complexity": 5.0}, [])
     mock_storage.get_history.assert_called_once_with(limit=20)
+    mock_storage.get_recent_errors.assert_called_once_with(limit=5)
     mock_ui.display_dashboard.assert_called_once()
 
 

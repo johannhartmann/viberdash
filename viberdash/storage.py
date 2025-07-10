@@ -41,6 +41,22 @@ class MetricsStorage:
                 ON metrics(timestamp DESC)
             """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS analysis_errors (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    tool TEXT,
+                    message TEXT
+                )
+            """
+            )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_error_timestamp
+                ON analysis_errors(timestamp DESC)
+            """
+            )
 
             # Add maintainability_density column if it doesn't exist
             cursor = conn.execute("PRAGMA table_info(metrics)")
@@ -53,15 +69,15 @@ class MetricsStorage:
 
             conn.commit()
 
-    def save_metrics(self, metrics: dict[str, Any]) -> int:
-        """Save metrics to database.
-
+    def save_metrics(
+        self, metrics: dict[str, Any], errors: list[dict[str, str]]
+    ) -> int:
+        """Save metrics and errors to the database.
         Args:
             metrics: Dictionary containing metric values
-
+            errors: A list of errors encountered during analysis
         Returns:
-            ID of inserted record
-
+            ID of the inserted metrics record
         """
         # Extract main metrics
         record = {
@@ -77,7 +93,8 @@ class MetricsStorage:
         }
 
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
+            cursor = conn.cursor()
+            cursor.execute(
                 """
                 INSERT INTO metrics (
                     avg_complexity, maintainability_index, maintainability_density,
@@ -91,8 +108,22 @@ class MetricsStorage:
             """,
                 record,
             )
-            conn.commit()
             lastrowid = cursor.lastrowid
+
+            # Save errors
+            if errors:
+                error_records = [
+                    (err.get("tool"), err.get("message")) for err in errors
+                ]
+                cursor.executemany(
+                    """
+                    INSERT INTO analysis_errors (tool, message)
+                    VALUES (?, ?)
+                """,
+                    error_records,
+                )
+
+            conn.commit()
             return lastrowid if lastrowid is not None else 0
 
     def get_latest(self) -> dict[str, Any] | None:
@@ -188,6 +219,25 @@ class MetricsStorage:
                 result["raw_data"] = {}
         return result
 
+    def get_recent_errors(self, limit: int = 5) -> list[dict[str, Any]]:
+        """Get the most recent analysis errors.
+        Args:
+            limit: Maximum number of errors to return
+        Returns:
+            A list of error dictionaries, newest first
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT * FROM analysis_errors
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """,
+                (limit,),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def cleanup_old_entries(self, keep_days: int = 30) -> int:
         """Remove entries older than specified days.
 
@@ -206,5 +256,16 @@ class MetricsStorage:
             """,
                 (-keep_days,),
             )
+            deleted_metrics = cursor.rowcount
+
+            cursor.execute(
+                """
+                DELETE FROM analysis_errors
+                WHERE timestamp < datetime('now', ? || ' days')
+            """,
+                (-keep_days,),
+            )
+            deleted_errors = cursor.rowcount
+
             conn.commit()
-            return cursor.rowcount
+            return deleted_metrics + deleted_errors

@@ -218,29 +218,30 @@ class CodeAnalyzer:
 
         return exclude_args
 
-    def run_analysis(self) -> dict[str, Any]:
-        """Run all analysis tools and return aggregated metrics.
-
+    def run_analysis(self) -> tuple[dict[str, Any], list[dict[str, str]]]:
+        """Run all analysis tools and return aggregated metrics and errors.
         Returns:
-            Dictionary containing all collected metrics
-
+            A tuple containing:
+            - Dictionary of all collected metrics
+            - List of errors encountered during analysis
         """
-        metrics = {}
+        metrics: dict[str, Any] = {}
+        errors: list[dict[str, str]] = []
 
         # Run each analysis tool
-        metrics.update(self._analyze_complexity())
-        metrics.update(self._analyze_maintainability())
-        metrics.update(self._analyze_duplication())
-        metrics.update(self._analyze_coverage())
-        metrics.update(self._analyze_dead_code())
-        metrics.update(self._analyze_style_issues())
-        metrics.update(self._analyze_documentation())
-        metrics.update(self._count_code_elements())
+        metrics.update(self._analyze_complexity(errors))
+        metrics.update(self._analyze_maintainability(errors))
+        metrics.update(self._analyze_duplication(errors))
+        metrics.update(self._analyze_coverage(errors))
+        metrics.update(self._analyze_dead_code(errors))
+        metrics.update(self._analyze_style_issues(errors))
+        metrics.update(self._analyze_documentation(errors))
+        metrics.update(self._count_code_elements(errors))
 
         # Calculate maintainability density
         metrics.update(self._calculate_maintainability_density(metrics))
 
-        return metrics
+        return metrics, errors
 
     def _run_tool(
         self, cmd: list[str], timeout: int = 60
@@ -291,7 +292,7 @@ class CodeAnalyzer:
             return 0.0
         return min((count / total) * 100, 100.0)
 
-    def _analyze_complexity(self) -> dict[str, float]:
+    def _analyze_complexity(self, errors: list[dict[str, str]]) -> dict[str, float]:
         """Analyze cyclomatic complexity using radon."""
         try:
             cmd = [
@@ -307,6 +308,14 @@ class CodeAnalyzer:
             result = self._run_tool(cmd)
 
             if result.returncode != 0:
+                errors.append(
+                    {
+                        "tool": "radon",
+                        "message": (
+                            "Radon complexity scan failed:" f" {result.stderr[:200]}"
+                        ),
+                    }
+                )
                 return self._default_complexity_metrics()
 
             data = self._parse_json_output(result.stdout, {})
@@ -317,6 +326,9 @@ class CodeAnalyzer:
 
         except Exception as e:
             logger.debug(f"Error analyzing complexity: {e}")
+            errors.append(
+                {"tool": "radon", "message": f"Complexity analysis error: {e}"}
+            )
             return self._default_complexity_metrics()
 
     def _default_complexity_metrics(self) -> dict[str, float]:
@@ -353,7 +365,9 @@ class CodeAnalyzer:
                     complexities.append(item["complexity"])
         return complexities
 
-    def _analyze_maintainability(self) -> dict[str, float]:
+    def _analyze_maintainability(
+        self, errors: list[dict[str, str]]
+    ) -> dict[str, float]:
         """Analyze maintainability index using radon."""
         try:
             cmd = [sys.executable, "-m", "radon", "mi", str(self.source_dir), "-j"]
@@ -361,6 +375,15 @@ class CodeAnalyzer:
             result = self._run_tool(cmd)
 
             if result.returncode != 0:
+                errors.append(
+                    {
+                        "tool": "radon",
+                        "message": (
+                            "Radon maintainability scan failed:"
+                            f" {result.stderr[:200]}"
+                        ),
+                    }
+                )
                 return {"maintainability_index": 0.0}
 
             data = self._parse_json_output(result.stdout, {})
@@ -368,6 +391,9 @@ class CodeAnalyzer:
 
         except Exception as e:
             logger.debug(f"Error analyzing maintainability: {e}")
+            errors.append(
+                {"tool": "radon", "message": f"Maintainability analysis error: {e}"}
+            )
             return {"maintainability_index": 0.0}
 
     def _calculate_avg_maintainability(self, data: dict) -> dict[str, float]:
@@ -382,13 +408,25 @@ class CodeAnalyzer:
             return {"maintainability_index": sum(mi_values) / len(mi_values)}
         return {"maintainability_index": 0.0}
 
-    def _analyze_duplication(self) -> dict[str, float]:
+    def _analyze_duplication(self, errors: list[dict[str, str]]) -> dict[str, float]:
         """Analyze code duplication using pylint."""
         try:
             pylintrc_path = self._create_duplication_pylintrc()
 
             try:
                 result = self._run_pylint_duplication(pylintrc_path)
+
+                if result.returncode != 0:
+                    errors.append(
+                        {
+                            "tool": "pylint",
+                            "message": (
+                                "Pylint duplication scan failed:"
+                                f" {result.stderr[:200]}"
+                            ),
+                        }
+                    )
+                    return {"code_duplication": 0.0}
 
                 if result.stdout:
                     messages = self._parse_json_output(result.stdout, [])
@@ -401,6 +439,9 @@ class CodeAnalyzer:
 
         except Exception as e:
             logger.debug(f"Error analyzing duplication: {e}")
+            errors.append(
+                {"tool": "pylint", "message": f"Duplication analysis error: {e}"}
+            )
             return {"code_duplication": 0.0}
 
     def _create_duplication_pylintrc(self) -> str:
@@ -478,25 +519,33 @@ output-format=json
         )
         return {"code_duplication": duplication_percentage}
 
-    def _analyze_coverage(self) -> dict[str, float]:
+    def _analyze_coverage(self, errors: list[dict[str, str]]) -> dict[str, float]:
         """Analyze test coverage by running tests."""
         try:
             test_dir, project_root = self._find_test_directory()
             if not test_dir or not project_root:
-                logger.debug("No test directory found or coverage analysis failed")
+                logger.debug("No test directory found, skipping coverage analysis.")
                 return {"test_coverage": 0.0}
 
-            coverage = self._run_and_parse_coverage(test_dir, project_root)
+            coverage = self._run_and_parse_coverage(test_dir, project_root, errors)
             return {"test_coverage": coverage}
 
         except subprocess.TimeoutExpired:
             logger.info("Coverage analysis timed out (tests took too long)")
-            return {"test_coverage": 0.0}
+            errors.append(
+                {"tool": "pytest", "message": "Test coverage analysis timed out"}
+            )
+            return {"test_coverage": -1.0}  # Indicate test failure
         except Exception as e:
             logger.debug(f"Error analyzing coverage: {e}")
-            return {"test_coverage": 0.0}
+            errors.append(
+                {"tool": "pytest", "message": f"Coverage analysis error: {e}"}
+            )
+            return {"test_coverage": -1.0}  # Indicate test failure
 
-    def _run_and_parse_coverage(self, test_dir: Path, project_root: Path) -> float:
+    def _run_and_parse_coverage(
+        self, test_dir: Path, project_root: Path, errors: list[dict[str, str]]
+    ) -> float:
         """Run pytest with coverage and parse the result."""
         module_name = self.source_dir.name
         logger.info(f"Running coverage analysis for {module_name}...")
@@ -508,18 +557,43 @@ output-format=json
             logger.info(f"Test coverage: {coverage:.1f}%")
             return coverage
 
+        # Test execution failed or no coverage data found
+        if result.returncode != 0:
+            errors.append(
+                {
+                    "tool": "pytest",
+                    "message": f"Tests failed to run. Exit code: {result.returncode}",
+                }
+            )
+            return -1.0  # Indicate test failure
+
         # Check if tests ran but couldn't parse coverage
         if "failed" in result.stdout or "passed" in result.stdout:
             logger.debug("Tests ran but couldn't parse coverage")
+            errors.append(
+                {"tool": "pytest", "message": "Could not parse test coverage output"}
+            )
         else:
             logger.debug("No tests found or pytest failed to run")
+            errors.append(
+                {"tool": "pytest", "message": "No tests found or pytest failed"}
+            )
 
         return 0.0
 
-    def _analyze_dead_code(self) -> dict[str, float]:
+    def _analyze_dead_code(self, errors: list[dict[str, str]]) -> dict[str, float]:
         """Analyze dead code using vulture."""
         try:
             result = self._run_vulture()
+
+            if result.returncode != 0 and "confidence" not in result.stderr:
+                errors.append(
+                    {
+                        "tool": "vulture",
+                        "message": f"Vulture scan failed: {result.stderr[:200]}",
+                    }
+                )
+                return {"dead_code": 0.0}
 
             if not result.stdout.strip():
                 return {"dead_code": 0.0}
@@ -532,6 +606,9 @@ output-format=json
 
         except Exception as e:
             logger.debug(f"Error analyzing dead code: {e}")
+            errors.append(
+                {"tool": "vulture", "message": f"Dead code analysis error: {e}"}
+            )
             return {"dead_code": 0.0}
 
     def _run_vulture(self) -> subprocess.CompletedProcess:
@@ -567,10 +644,12 @@ output-format=json
                 count += 1
         return count
 
-    def _analyze_style_issues(self) -> dict[str, float | int]:
+    def _analyze_style_issues(
+        self, errors: list[dict[str, str]]
+    ) -> dict[str, float | int]:
         """Analyze code style issues using ruff."""
         try:
-            violations = self._run_ruff_check()
+            violations = self._run_ruff_check(errors)
             total_issues = len(violations)
 
             total_lines = self._count_lines()
@@ -583,9 +662,12 @@ output-format=json
 
         except Exception as e:
             logger.debug(f"Error analyzing style issues: {e}")
+            errors.append({"tool": "ruff", "message": f"Style analysis error: {e}"})
             return {"style_issues": 0, "style_violations": 0.0}
 
-    def _run_ruff_check(self, select: str | None = None) -> list:
+    def _run_ruff_check(
+        self, errors: list[dict[str, str]], select: str | None = None
+    ) -> list:
         """Run ruff and return violations."""
         cmd = [
             sys.executable,
@@ -603,13 +685,23 @@ output-format=json
         cmd.extend(self._create_exclude_args("ruff"))
 
         result = self._run_tool(cmd)
+
+        if result.returncode != 0 and "error:" in result.stderr.lower():
+            # Ruff exits with non-zero code if issues are found, so check stderr
+            errors.append(
+                {
+                    "tool": "ruff",
+                    "message": f"Ruff scan failed: {result.stderr[:200]}",
+                }
+            )
+            # Continue to parse violations even if exit code is non-zero
         violations = self._parse_json_output(result.stdout, [])
         return violations if isinstance(violations, list) else []
 
-    def _analyze_documentation(self) -> dict[str, float]:
+    def _analyze_documentation(self, errors: list[dict[str, str]]) -> dict[str, float]:
         """Analyze documentation coverage using Ruff docstring checks."""
         try:
-            violations = self._run_ruff_check(select="D")
+            violations = self._run_ruff_check(errors, select="D")
             total_doc_issues = len(violations)
 
             total_elements = self._count_pattern(r"^\s*(def|class)\s+\w+")
@@ -624,6 +716,9 @@ output-format=json
 
         except Exception as e:
             logger.debug(f"Error analyzing documentation: {e}")
+            errors.append(
+                {"tool": "ruff", "message": f"Documentation analysis error: {e}"}
+            )
             return {"doc_issues": 0, "doc_coverage": 100.0}
 
     def _calculate_doc_coverage(self, issues: int, elements: int) -> float:
@@ -633,10 +728,10 @@ output-format=json
         # Higher issues = lower coverage
         return max(0, 100 - (issues / elements * 100))
 
-    def _count_code_elements(self) -> dict[str, int]:
+    def _count_code_elements(self, errors: list[dict[str, str]]) -> dict[str, int]:
         """Count lines, classes, and functions in the codebase."""
         try:
-            line_counts = self._get_line_counts_from_radon()
+            line_counts = self._get_line_counts_from_radon(errors)
             total_classes = self._count_pattern(r"^class\s+\w+")
 
             return {
@@ -647,15 +742,24 @@ output-format=json
 
         except Exception as e:
             logger.debug(f"Error counting code elements: {e}")
+            errors.append({"tool": "internal", "message": f"Code counting error: {e}"})
             return {"total_lines": 0, "total_code_lines": 0, "total_classes": 0}
 
-    def _get_line_counts_from_radon(self) -> dict[str, int]:
+    def _get_line_counts_from_radon(
+        self, errors: list[dict[str, str]]
+    ) -> dict[str, int]:
         """Get line counts using radon raw metrics."""
         cmd = [sys.executable, "-m", "radon", "raw", str(self.source_dir), "-j"]
         cmd.extend(self._create_exclude_args("radon"))
         result = self._run_tool(cmd)
 
         if result.returncode != 0:
+            errors.append(
+                {
+                    "tool": "radon",
+                    "message": f"Radon line count scan failed: {result.stderr[:200]}",
+                }
+            )
             return {"total_lines": 0, "total_code_lines": 0}
 
         data = self._parse_json_output(result.stdout, {})
